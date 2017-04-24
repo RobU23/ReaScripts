@@ -1,4 +1,11 @@
 # ReaScripts
 
-Scripts for REAPER - http://reaper.fm/
+Lua scripts for REAPER - http://reaper.fm/ 
 
+See the [Wiki](https://github.com/RobU23/ReaScripts/wiki) for details
+
+This repository is [ReaPack](https://reapack.com/) compatible - The import URL is `https://github.com/RobU23/ReaScripts/raw/release/index.xml`
+
+---
+*If you find any of this stuff useful, and would like to buy me a beer, the internets has the answer...*
+https://www.paypal.me/RobUrquhart
