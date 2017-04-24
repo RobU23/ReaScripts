@@ -1,5 +1,4 @@
-
-MIDI Ex Machina - A note randomizing sequencer for Reaper
+### MIDI Ex Machina - A note randomizing sequencer for Reaper
 
 Features
 * Note randomizer
@@ -18,4 +17,9 @@ Features
   * Pulse, steps, and rotation euclidean sliders
   * Accent level and probability sliders
   * Options toggle (seq, acc, rnd)
+  
+  Credits
+  * The GUI is a fork of [Eugen2771](https://github.com/EUGEN27771)'s superb Lua GUI Template for Reaper. 
+  * The Persistence library is provided by [Gerhard Roethlin](https://the-color-black.net/blog/LuaTablePersistence)
+  * The Bjorklund library provided by https://codegists.com/snippet/lua/bjorklundlua_ptrv_lua
   
