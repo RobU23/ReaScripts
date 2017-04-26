@@ -329,10 +329,13 @@ function GetReaperGrid(gridRad)
 	if m.activeTake then
 		m.reaGrid, __, __ = reaper.MIDI_GetGrid(m.activeTake) -- returns quarter notes
 		if gridRad then -- else, if a grid object was passed, update it
-			if m.reaGrid == 0.125 then gridRad.val1 = 1
-			elseif m.reaGrid == 0.25 then gridRad.val1 = 2
-			elseif m.reaGrid == 0.5 then gridRad.val1 = 3
-			elseif m.reaGrid == 1 then gridRad.val1 = 4
+		--if m.reaGrid <= 0.17 then gridRad.val1 = 1 -- 1/16t
+			if m.reaGrid == 0.25 then gridRad.val1 = 1 -- 1/16
+		--elseif m.reaGrid == 0.25 then gridRad.val1 = 2 -- 1/16
+		--elseif m.reaGrid == 0.33 then gridRad.val1 = 3 -- 1/8t
+			elseif m.reaGrid == 0.5 then gridRad.val1 = 2 -- 1/8
+		--elseif m.reaGrid == 0.67 then gridRad.val1 = 5 -- 1/4t
+			elseif m.reaGrid == 1 then gridRad.val1 = 3 -- 1/4
 			end -- m.reaGrid
 		end
 	else 
@@ -527,9 +530,11 @@ function SetSeqGridSizes(sliderTable)
 	local debug = false
 	if debug or m.debug then ConMsg("SetSeqGridSizes()") end
 	for k, v in pairs(sliderTable) do
-		if sliderTable[k].label == "1/32" then m.preSeqProbTable[k] = 0.125 
-		elseif sliderTable[k].label == "1/16" then m.preSeqProbTable[k] = 0.25
+		--if sliderTable[k].label == "1/16t" then m.preSeqProbTable[k] = 0.167 
+		if sliderTable[k].label == "1/16" then m.preSeqProbTable[k] = 0.25
+		--elseif sliderTable[k].label == "1/8t" then m.preSeqProbTable[k] = 0.333
 		elseif sliderTable[k].label == "1/8" then m.preSeqProbTable[k] = 0.5
+		--elseif sliderTable[k].label == "1/4t" then m.preSeqProbTable[k] = 0.667
 		elseif sliderTable[k].label == "1/4" then m.preSeqProbTable[k] = 1.0
 		elseif sliderTable[k].label == "Rest" then m.preSeqProbTable[k] = -1.0
 		end
@@ -788,10 +793,12 @@ function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 			if legF ~= 1 then -- no legato when called by euclid
 				if legF then -- handle legato flag (3 = noteStart, 4 = noteEnd, 5 = noteLen)
 					noteLen = t2[i][5]
-					if noteLen >= 960 + m.legato and noteLen <= 960 - m.legato then noteLen = 960
-					elseif noteLen >= 480 + m.legato and noteLen <= 480 - m.legato then noteLen = 480
-					elseif noteLen >= 240 + m.legato and noteLen <= 240 - m.legato then noteLen = 240
-					elseif noteLen >= 120 + m.legato and noteLen <= 120 - m.legato then noteLen = 120
+					if noteLen >= 960 + m.legato and noteLen <= 960 - m.legato then noteLen = 960 -- 1/4
+				--elseif noteLen >= 642 + m.legato and noteLen <= 644 - m.legato then noteLen = 643.2 -- 1/4t
+					elseif noteLen >= 480 + m.legato and noteLen <= 480 - m.legato then noteLen = 480 -- 1/8
+				--elseif noteLen >= 315 + m.legato and noteLen <= 317 - m.legato then noteLen = 316.8 -- 1/8t
+					elseif noteLen >= 240 + m.legato and noteLen <= 240 - m.legato then noteLen = 240 -- 1/16
+				--elseif noteLen >= 162 + m.legato and noteLen <= 164 - m.legato then noteLen = 163.2 -- 1/16t
 					end
 					t2[i][4] = t2[i][3] + noteLen + legProbTable[math.random(1, #legProbTable)]
 				end -- legato     
@@ -1052,23 +1059,25 @@ local noteOptionText = e.Textbox:new({1}, nx+(np*14)+20, 210, (nw*4), 20, e.col_
 local sequenceBtn = e.Button:new({2}, 25, 205, 110, 25, e.col_yellow, "Generate", e.Arial, 16, e.col_grey8)
 local sx, sy, sw, sh, sp = 160, 50, 30, 150, 40
 -- sequencer grid size radio selector
-local seqGridRad = e.Rad_Button:new({2,3}, sx, sy+20, 30, 30, e.col_yellow, "", e.Arial, 16, e.col_grey8, 2, {"1/32", "1/16", "1/8", "1/4"})
+local seqGridRad = e.Rad_Button:new({2,3}, sx, sy + 40, 30, 30, e.col_yellow, "", e.Arial, 16, e.col_grey8, 1, {"1/16", "1/8", "1/4"})
 local seqGridText = e.Textbox:new({2,3}, sx, 210, (sw*2)+20, 20, e.col_grey5, "Grid Size", e.Arial, 16, e.col_grey7)
 -- sequence grid probability sliders
-local seqSldr32   = e.Vert_Slider:new({2}, sx+(sp*3),         sy, sw, sh, e.col_blue, "1/32", e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
-local seqSldr16   = e.Vert_Slider:new({2}, sx+(sp*4),  sy, sw, sh, e.col_blue, "1/16", e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
-local seqSldr8    = e.Vert_Slider:new({2}, sx+(sp*5),  sy, sw, sh, e.col_blue, "1/8",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
-local seqSldr4    = e.Vert_Slider:new({2}, sx+(sp*6),  sy, sw, sh, e.col_blue, "1/4",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
-local seqSldrRest = e.Vert_Slider:new({2}, sx+(sp*7),  sy, sw, sh, e.col_blue, "Rest", e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+--local seqSldr16t  = e.Vert_Slider:new({2}, sx+(sp*3),  sy, sw, sh, e.col_blue, "1/16t", e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+local seqSldr16   = e.Vert_Slider:new({2}, sx+(sp*3),  sy, sw, sh, e.col_blue, "1/16",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+--local seqSldr8t   = e.Vert_Slider:new({2}, sx+(sp*5),  sy, sw, sh, e.col_blue, "1/8t",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+local seqSldr8    = e.Vert_Slider:new({2}, sx+(sp*4),  sy, sw, sh, e.col_blue, "1/8",   e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+--local seqSldr4t   = e.Vert_Slider:new({2}, sx+(sp*7),  sy, sw, sh, e.col_blue, "1/4t",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+local seqSldr4    = e.Vert_Slider:new({2}, sx+(sp*5),  sy, sw, sh, e.col_blue, "1/4",   e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+local seqSldrRest = e.Vert_Slider:new({2}, sx+(sp*6),  sy, sw, sh, e.col_blue, "Rest",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
 -- sequence grid probability slider table
-local t_seqSliders = {seqSldr32, seqSldr16, seqSldr8, seqSldr4, seqSldrRest}
+local t_seqSliders = {seqSldr16, seqSldr8, seqSldr4, seqSldrRest}
 -- sequence grid probability sliders label 
-local seqSldrText = e.Textbox:new({2}, sx + (sp * 3), 210, (sw * 5) + 40, 20, e.col_grey5, "Sequence Weight Sliders", e.Arial, 16, e.col_grey7)
+local seqSldrText = e.Textbox:new({2}, sx + (sp * 3) - 10, 210, (sw * 4) + 50, 20, e.col_grey5, "Sequence Weight Sliders", e.Arial, 16, e.col_grey7)
 
 -- velocity accent slider (shared with Euclid layer)
-local seqAccRSldr  = e.V_Rng_Slider:new({2,3}, sx + (sp * 9), sy, sw, sh, e.col_blue, "", e.Arial, 16, e.col_grey8, 100, 127, 0, 127, 1)
-local seqAccProbSldr = e.Vert_Slider:new({2,3}, sx + (sp * 10),  sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, 3, 0, 0, 10, 1)
-local seqAccSldrText = e.Textbox:new({2,3}, sx + (sp * 9), 210, (sw * 2) + 10, 20, e.col_grey5, "Vel  |  Acc", e.Arial, 16, e.col_grey7)
+local seqAccRSldr  = e.V_Rng_Slider:new({2,3}, sx + (sp * 10), sy, sw, sh, e.col_blue, "", e.Arial, 16, e.col_grey8, 100, 127, 0, 127, 1)
+local seqAccProbSldr = e.Vert_Slider:new({2,3}, sx + (sp * 11),  sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, 3, 0, 0, 10, 1)
+local seqAccSldrText = e.Textbox:new({2,3}, sx + (sp * 10), 210, (sw * 2) + 10, 20, e.col_grey5, "Vel  |  Acc", e.Arial, 16, e.col_grey7)
 
 -- legato slider
 local seqLegProbSldr = e.Vert_Slider:new({2}, sx + (sp * 12), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, 3, 0, 0, 10, 1)
@@ -1092,7 +1101,7 @@ local t_euclidSliders = {euclidPulsesSldr, euclidStepsSldr, euclidRotationSldr}
 -- euclid slider label 
 local txtEuclidLabel = e.Textbox:new({3}, ex + (ep * 3), 210, (ew * 3) + 20, 20, e.col_grey5, "Euclid Sliders", Arial, 16, e.col_grey7)
 -- Sequencer options
-local eucOptionsCb = e.Checkbox:new({3},  ex + (ep * 14) + 10, ey + 30, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0}, {"Generate", "Accent", "Rnd Notes"})
+local eucOptionsCb = e.Checkbox:new({3},  ex + (ep * 14) + 10, ey + 40, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0}, {"Generate", "Accent", "Rnd Notes"})
 
 --------------------------------------------------------------------------------
 -- Options Layer
@@ -1365,18 +1374,15 @@ seqGridRad.onLClick = function() -- change grid size
 	local debug = false
 	if debug or m.debug then ConMsg("\nseqGridRad.onLClick()") end
 	if m.activeTake then
-		if seqGridRad.val1 == 1 then -- 1/32 grid
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40190) -- set grid 1/32
-			seqSldr32.val1 = 8; seqSldr16.val1 = 0; seqSldr8.val1 = 0; seqSldr4.val1 = 0; seqSldrRest.val1 = 4
-		elseif seqGridRad.val1 == 2 then -- 1/16 grid
+		if seqGridRad.val1 == 1 then -- 1/16 grid
 			reaper.MIDIEditor_OnCommand(m.activeEditor, 40192) -- set grid 1/16 
-			seqSldr32.val1 = 0; seqSldr16.val1 = 8; seqSldr8.val1 = 8; seqSldr4.val1 = 0; seqSldrRest.val1 = 4        
-		elseif seqGridRad.val1 == 3 then -- 1/8 grid
-			seqSldr32.val1 = 0; seqSldr16.val1 = 0; seqSldr8.val1 = 8; seqSldr4.val1 = 2; seqSldrRest.val1 = 2      
+			seqSldr16.val1 = 8; seqSldr8.val1 = 8; seqSldr4.val1 = 0; seqSldrRest.val1 = 4        
+		elseif seqGridRad.val1 == 2 then -- 1/8 grid
+			seqSldr16.val1 = 0; seqSldr8.val1 = 8; seqSldr4.val1 = 2; seqSldrRest.val1 = 2      
 			reaper.MIDIEditor_OnCommand(m.activeEditor, 40197) -- set grid 1/8  
-		elseif seqGridRad.val1 == 4 then -- 1/4 grid
+		elseif seqGridRad.val1 == 3 then -- 1/4 grid
 			reaper.MIDIEditor_OnCommand(m.activeEditor, 40201) -- set grid 1/4 
-			seqSldr32.val1 = 0; seqSldr16.val1 = 0; seqSldr8.val1 = 2; seqSldr4.val1 = 8; seqSldrRest.val1 = 1        
+			seqSldr16.val1 = 0; seqSldr8.val1 = 2; seqSldr4.val1 = 8; seqSldrRest.val1 = 1        
 		end -- seGridRad
 	end -- m.activeTake
 end
