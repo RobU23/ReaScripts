@@ -1591,6 +1591,19 @@ function MainLoop()
 	char = gfx.getchar()
 	if char == 32 then reaper.Main_OnCommand(40044, 0) end
 	
+	-- (S)ave / (L)oad ProjectExtState Test
+	if char == 115 then
+		-- save stuff
+		ConMsg("Saving")
+		reaper.SetProjExtState(0, "RobU", "val1", "somevalue")
+	elseif char == 108 then
+		-- load stuff
+		ConMsg("Loading")
+		__, mystr = reaper.GetProjExtState(0, "RobU", "val1")
+		ConMsg("val1 = " .. mystr)
+		
+	end
+	
 	-- Defer 'MainLoop' if not explicitly quiting (esc)
 	if char ~= -1 and char ~= 27 then reaper.defer(MainLoop) end
 	
