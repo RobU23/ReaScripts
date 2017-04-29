@@ -133,7 +133,9 @@ m.preSeqProbTable = {};   m.seqProbTable  = {}
 m.accProbTable = {};      m.octProbTable  = {}
 m.legProbTable = {}
 
-dstr, lstr = "", "" -- debug strings for GfxCon function
+pExtStateF = false -- when true, we need to update the pExtState
+pExtState = {} -- Reaper project ext state 
+pExtStateStr = "" -- pickled string
 --------------------------------------------------------------------------------
 -- GLOBAL VARIABLES END
 --------------------------------------------------------------------------------
@@ -192,6 +194,88 @@ local function GfxCon(xpos, ypos, str)
 	gfx.x = xpos + m.win_w - strw	- padx -- set the print position, with padding
 	gfx.y = ypos + pady	-- set the print position, with padding
 	gfx.drawstr(fstr)
+end
+
+--------------------------------------------------------------------------------
+-- Pickle table serialization - Steve Dekorte, http://www.dekorte.com, Apr 2000
+-- Freeware
+--------------------------------------------------------------------------------
+function pickle(t)
+	return Pickle:clone():pickle_(t)
+end
+--------------------------------------------------------------------------------
+Pickle = {
+	clone = function (t) local nt = {}
+	for i, v in pairs(t) do 
+		nt[i] = v 
+	end
+	return nt 
+end 
+}
+--------------------------------------------------------------------------------
+function Pickle:pickle_(root)
+	if type(root) ~= "table" then 
+		error("can only pickle tables, not " .. type(root) .. "s")
+	end
+	self._tableToRef = {}
+	self._refToTable = {}
+	local savecount = 0
+	self:ref_(root)
+	local s = ""
+	while #self._refToTable > savecount do
+		savecount = savecount + 1
+		local t = self._refToTable[savecount]
+		s = s .. "{\n"
+		for i, v in pairs(t) do
+			s = string.format("%s[%s]=%s,\n", s, self:value_(i), self:value_(v))
+		end
+	s = s .. "},\n"
+	end
+	return string.format("{%s}", s)
+end
+--------------------------------------------------------------------------------
+function Pickle:value_(v)
+	local vtype = type(v)
+	if     vtype == "string" then return string.format("%q", v)
+	elseif vtype == "number" then return v
+	elseif vtype == "boolean" then return tostring(v)
+	elseif vtype == "table" then return "{"..self:ref_(v).."}"
+	else error("pickle a " .. type(v) .. " is not supported")
+	end 
+end
+--------------------------------------------------------------------------------
+function Pickle:ref_(t)
+	local ref = self._tableToRef[t]
+	if not ref then 
+		if t == self then error("can't pickle the pickle class") end
+		table.insert(self._refToTable, t)
+		ref = #self._refToTable
+		self._tableToRef[t] = ref
+	end
+	return ref
+end
+--------------------------------------------------------------------------------
+-- unpickle
+--------------------------------------------------------------------------------
+function unpickle(s)
+	if type(s) ~= "string" then
+		error("can't unpickle a " .. type(s) .. ", only strings")
+	end
+	local gentables = load("return " .. s)
+	local tables = gentables()
+	for tnum = 1, #tables do
+		local t = tables[tnum]
+		local tcopy = {}
+		for i, v in pairs(t) do tcopy[i] = v end
+		for i, v in pairs(tcopy) do
+			local ni, nv
+			if type(i) == "table" then ni = tables[i[1]] else ni = i end
+			if type(v) == "table" then nv = tables[v[1]] else nv = v end
+			t[i] = nil
+			t[ni] = nv
+		end
+	end
+	return tables[1]
 end
 --------------------------------------------------------------------------------
 -- Utility Functions End
@@ -1290,9 +1374,11 @@ end
 noteOptionsCb.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nnoteOptionsCb.onLClick()") end
-	m.rndAllNotesF = 		 noteOptionsCb.val1[1] == 1 and true or false -- All / Sel Notes
+	m.rndAllNotesF =  noteOptionsCb.val1[1] == 1 and true or false -- All / Sel Notes
 	m.rndFirstNoteF = noteOptionsCb.val1[2] == 1 and true or false -- 1st Note Root
-	m.rndOctX2F = 				 noteOptionsCb.val1[3] == 1 and true or false -- Octave X2
+	m.rndOctX2F =     noteOptionsCb.val1[3] == 1 and true or false -- Octave X2
+	pExtState.noteOptionsCb = {m.rndAllNotesF, m.rndFirstNoteF, m.rndOctX2F}
+	pExtStateF = true
 	if debug or m.debug then PrintTable(noteOptionsCb.val1) end
 end
 
@@ -1306,6 +1392,8 @@ seqOptionsCb.onLClick = function()
 	m.seqLegatoF = 		seqOptionsCb.val1[4] == 1 and true or false -- Legato
 	m.seqRndNotesF = 	seqOptionsCb.val1[5] == 1 and true or false -- Randomize Notes
 	m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Repeat
+	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
+	pExtStateF = true
 	if debug or m.debug then PrintTable(seqOptionsCb.val1) end
 end
 
@@ -1316,6 +1404,8 @@ eucOptionsCb.onLClick = function()
 	m.eucF = 				 eucOptionsCb.val1[1] == 1 and true or false -- Generate
 	m.eucAccentF = 	 eucOptionsCb.val1[2] == 1 and true or false -- Accent
 	m.eucRndNotesF = eucOptionsCb.val1[3] == 1 and true or false -- Randomize notes
+	pExtState.eucOptionsCb = {m.eucF, m.eucAccentF, m.eucRndNotesF}
+	pExtStateF = true
 	if debug or m.debug then PrintTable(eucOptionsCb.val1) end
 end
 
@@ -1351,13 +1441,21 @@ keyDrop.onLClick = function()
 	m.key = keyDrop.val1
 	m.root = SetRootNote(m.oct, m.key)	
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
+	-- set project ext state
+	pExtState.key = m.key
+	pExtState.root = m.root
+	pExtStateF = true
 end
 -- Octave
 octDrop.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\noctDrop.onLClick()") end
 	m.oct = octDrop.val1
-	m.root = SetRootNote(m.oct, m.key)	
+	m.root = SetRootNote(m.oct, m.key)
+	-- set project ext state	
+	pExtState.oct = m.oct
+	pExtState.root = m.root
+	pExtStateF = true
 end
 -- Scale
 scaleDrop.onLClick = function()
@@ -1365,6 +1463,9 @@ scaleDrop.onLClick = function()
 	if debug or m.debug then ConMsg("\nscaleDrop.onLClick()") end
 	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
+	-- set project ext state	
+	pExtState.curScaleName = scaleDrop.val2[scaleDrop.val1]
+	pExtStateF = true
 end	
 
 --------------------------------------------------------------------------------
@@ -1455,41 +1556,62 @@ end
 --------------------------------------------------------------------------------
 -- Init Functions (GUI)
 --------------------------------------------------------------------------------
-function setDefaultScale()
+
+function setDefaultScaleOpts()
 	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultScale() = " .. m.curScaleName) end
-	local scaleIdx = 0
+	if debug or m.debug then ConMsg("SetDefaultScaleOpts()") end
+	-- Key
+	if pExtState.key then
+		m.key = math.floor(tonumber(pExtState.key))
+		keyDrop.val1 = m.key
+	end
+	-- Octave
+	if pExtState.oct then
+		m.oct = math.floor(tonumber(pExtState.oct))
+		octDrop.val1 = m.oct
+	end
+	-- Scale
+	local scaleIdx = 0; local scaleName = ""
+	if pExtState.curScaleName then
+		m.curScaleName = pExtState.curScaleName
+	end
 	for k, v in pairs(m.scales) do
 		if v.name == m.curScaleName then scaleDrop.val1 = k	end
 	end
+	-- apply all
+	m.root = SetRootNote(m.oct, m.key)
+	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
+	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
 end
+
 --[[
 ToDo - make these right click functions (layers, sliders, radio/checkbox)
--- reset zoom
 zoomDrop.onRClick = function()
-	local result = reaper.ShowMessageBox("Reset Zoom?", "Zoom Reset", 4)
-	if result == 6 then zoomDrop.val1 = m.def_zoom end
-	zoomDrop.onLClick()
-end
--- octave, key, and root (root = octave + key)
-function setDefaultOctave()
-	octDrop.val1 - m.oct
-end
-function setDefaultKey()
--- 1 = low c in an octave, 2 = c#, 3 = d... 13 = high c
-	keyDrop.val1 = m.key
 end
 --]]
-function setDefaultNoteOptions()
+function setDefaultRndOptions()
 	local debug = false
-	if debug or m.debug then ConMsg("setDefaultNoteOptions()") end
+	if debug or m.debug then ConMsg("setDefaultRndOptions()") end
+	if pExtState.noteOptionsCb then
+		m.rndAllNotesF =  pExtState.noteOptionsCb[1] == true and true or false 
+		m.rndFirstNoteF = pExtState.noteOptionsCb[2] == true and true or false
+		m.rndOctX2F =     pExtState.noteOptionsCb[3] == true and true or false
+		end
 	noteOptionsCb.val1[1] = (true and m.rndAllNotesF) and 1 or 0 -- all notes
 	noteOptionsCb.val1[2] = (true and m.rndFirstNoteF) and 1 or 0 -- first note root
-	noteOptionsCb.val1[2] = (true and m.rndOctX2F) and 1 or 0 -- octave doubler
+	noteOptionsCb.val1[3] = (true and m.rndOctX2F) and 1 or 0 -- octave doubler
 end
 function setDefaultSeqOptions()
 	local debug = false
 	if debug or m.debug then ConMsg("setDefaultSeqOptions()") end
+	if pExtState.seqOptionsCb then 
+		m.seqF = 					pExtState.seqOptionsCb[1] ==  true and true or false
+		m.seqFirstNoteF = pExtState.seqOptionsCb[2] ==  true and true or false
+		m.seqAccentF = 		pExtState.seqOptionsCb[3] ==  true and true or false
+		m.seqLegatoF = 		pExtState.seqOptionsCb[4] ==  true and true or false
+		m.seqRndNotesF = 	pExtState.seqOptionsCb[5] ==  true and true or false
+		m.seqRepeatF = 		pExtState.seqOptionsCb[6] ==  true and true or false
+	end
 	seqOptionsCb.val1[1] = (true and m.seqF) and 1 or 0 -- generate
 	seqOptionsCb.val1[2] = (true and m.seqFirstNoteF) and 1 or 0 -- 1st Note Always
 	seqOptionsCb.val1[3] = (true and m.seqAccentF) and 1 or 0 -- accent
@@ -1500,6 +1622,11 @@ end
 function setDefaultEucOptions()
 	local debug = false
 	if debug or m.debug then ConMsg("setDefaultEucOptions()") end
+	if pExtState.eucOptionsCb then 
+		m.eucF = 					pExtState.eucOptionsCb[1] ==  true and true or false
+		m.eucAccentF = 		pExtState.eucOptionsCb[2] ==  true and true or false
+		m.eucRndNotesF = 	pExtState.eucOptionsCb[3] ==  true and true or false
+	end
 	eucOptionsCb.val1[1] = (true and m.eucF) and 1 or 0 -- generate
 	eucOptionsCb.val1[2] = (true and m.eucAccentF) and 1 or 0 -- accents
 	eucOptionsCb.val1[3] = (true and m.eucRndNotesF) and 1 or 0 -- randomize notes
@@ -1524,26 +1651,32 @@ function InitMidiExMachina()
 		ConMsg("InitMidiMachina() - No Active MIDI Editor")
 	end -- m.activeEditor
 	
+	-- Load ProjectExtState
+		__, pExtStateStr = reaper.GetProjExtState(0, "MEM", "pExtState")
+		if pExtStateStr ~= "" then
+			pExtState = unpickle(pExtStateStr)
+		end
+	
+	-- set defaults or restore from project state
+	setDefaultScaleOpts()
+	setDefaultRndOptions()
+	setDefaultSeqOptions()
+	setDefaultEucOptions()
+	
 	m.root = SetRootNote(m.oct, m.key) -- root note should match the gui..
 	for k, v in pairs(m.scales) do  -- create a scale list for the gui
 		m.scalelist[k] = m.scales[k]["name"]
 	end
 	
-	setDefaultScale()
+	-- setup up the current scale
 	ClearTable(m.preNoteProbTable); ClearTable(m.preSeqProbTable)
 	SetScale(m.curScaleName, m.scales, m.preNoteProbTable)	--set chosen scale
 	SetSeqGridSizes(t_seqSliders)
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
 	GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
-	
-	--set default checkbox options
-	setDefaultNoteOptions()
-	setDefaultSeqOptions()
-	setDefaultEucOptions()
+
 	--set sane default sequencer grid slider values
 	seqGridRad.onLClick()	
-	
-	
 	GetReaperGrid(seqGridRad)
 	
 	GetItemLength()
@@ -1591,21 +1724,14 @@ function MainLoop()
 	char = gfx.getchar()
 	if char == 32 then reaper.Main_OnCommand(40044, 0) end
 	
-	-- (S)ave / (L)oad ProjectExtState Test
-	if char == 115 then
-		-- save stuff
-		ConMsg("Saving")
-		reaper.SetProjExtState(0, "RobU", "val1", "somevalue")
-	elseif char == 108 then
-		-- load stuff
-		ConMsg("Loading")
-		__, mystr = reaper.GetProjExtState(0, "RobU", "val1")
-		ConMsg("val1 = " .. mystr)
-		
-	end
-	
 	-- Defer 'MainLoop' if not explicitly quiting (esc)
-	if char ~= -1 and char ~= 27 then reaper.defer(MainLoop) end
+	if char ~= -1 and char ~= 27 then 
+		reaper.defer(MainLoop) 
+	elseif pExtStateF then
+		pExtStateStr = pickle(pExtState)
+		reaper.SetProjExtState(0, "MEM", "pExtState", pExtStateStr )
+		pExtStateF = false
+	end
 	
 	-- Update Reaper GFX
 	gfx.update()
@@ -1623,7 +1749,7 @@ function MainLoop()
 					SetScale("Permute", m.scales, m.preNoteProbTable)
 					UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
 					m.pHash = pHash
-				end
+				end -- m.pHash
 				-- don't allow any note options that might upset permute...
 				noteOptionsCb.val1[1] = 0; m.rndAllNotesF = false -- maybe allow this...?
 				noteOptionsCb.val1[2] = 0; m.rndFirstNoteF = false
@@ -1639,13 +1765,13 @@ function MainLoop()
 		else -- handle m.activeTake error
 			ShowMessage(msgText, 1) 
 			m.activeTake = nil
-		end
+		end -- m.activeTake
 	else -- handle m.activeEditor error
 		-- pop up error message - switch layer on textbox element
 		ShowMessage(msgText, 1)
 		m.activeEditor = nil
 		m.activeTake = nil
-	end
+	end -- m.activeEditor
 	
 	e.gScaleState = true
 end
