@@ -60,7 +60,7 @@ local p = require 'persistence' -- currently unused, i.e. no save, load, nada...
 --------------------------------------------------------------------------------
 m = {} -- all ex machina data
 -- user changable options marked with "(option)"
-m.debug = true
+m.debug = false
 m.msgTimer = 30
 -- window
 m.win_title = "RobU : MIDI Ex Machina - v1.2.1"; m.win_dockstate = 0
@@ -133,10 +133,10 @@ m.preSeqProbTable = {};   m.seqProbTable  = {}
 m.accProbTable = {};      m.octProbTable  = {}
 m.legProbTable = {}
 
-pExtSaveStateF = false -- when true, we need to update the pExtState for saving
-pExtLoadStateF = true -- when true, we need to load the pExtState
+pExtSaveStateF = false -- when true, update the pExtState for saving
+pExtLoadStateF = true -- when true, load the pExtState
 pExtState = {} -- Reaper project ext state 
-pExtStateStr = "" -- pickled string
+pExtStateStr = "" -- pickled string. a nom a nom a nom...
 
 --------------------------------------------------------------------------------
 -- GLOBAL VARIABLES END
@@ -158,7 +158,7 @@ end
 --------------------------------------------------------------------------------
 -- RGB2Dec(r, g, b) - takes 8 bit r, g, b values, returns decimal (0 to 1)
 --------------------------------------------------------------------------------
-function RGB2Dec(r, g, b)
+local function RGB2Dec(r, g, b)
 	if r < 0 or r > 255 then r = wrap(r, 255) end
 	if g < 0 or g > 255 then g = wrap(g, 255) end
 	if b < 0 or b > 255 then b = wrap(b, 255) end
@@ -814,6 +814,7 @@ end
 function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 	local debug = false
 	if debug or m.debug then ConMsg("GenBjorklund()") end
+	local floor = math.floor
 	local t, t2 = NewNoteBuf(), GetNoteBuf()
 	CopyTable(t2, t)
 	GetReaperGrid() -- populates m.reaGrid
@@ -825,9 +826,11 @@ function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 	local noteStart, noteEnd, noteLen, noteVel = 0, 0, 0, 0
 	local newNote = 0
 	local noteCount = 0; restCount = 0
-	local pattern = b.generate(pulses.val1, steps.val1)
-	local rot = rotation.val1
-	local idx = (-rot) + 1; idx = Wrap(idx, steps.val1)
+	local pulse = floor(pulses.val1 + 0.5)
+	local step = floor(steps.val1 + 0.5)
+	local pattern = b.generate(pulse, step)
+	local rot = floor(rotation.val1 + 0.5)
+	local idx = (-rot) + 1; idx = Wrap(idx, step)
 	while itemPos < itemLength do
 		if pattern[idx] then
 			noteStart = itemPos
@@ -837,7 +840,7 @@ function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 			if m.eucAccentF then  -- handle accent flag
 				noteVel = accProbTable[math.random(1, #accProbTable)]
 			else
-				noteVel = math.floor(accSlider.val1)
+				noteVel = floor(accSlider.val1)
 			end -- m.seqAccentF      
 			--noteVel = accProbTable[math.random(1, #accProbTable)]
 			noteCount = noteCount + 1
@@ -855,7 +858,7 @@ function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 			restCount = restCount + 1
 		end
 		idx = idx + 1
-		idx = Wrap(idx, steps.val1)
+		idx = Wrap(idx, step)
 	end
 	PurgeNoteBuf()
 	InsertNotes()
@@ -1181,8 +1184,8 @@ local euclidBtn = e.Button:new({3}, 25, 205, 110, 25, e.col_orange, "Generate", 
 -- euclidean sliders
 local ex, ey, ew, eh, ep = 160, 50, 30, 150, 40
 --local vslider01 = e.Vert_Slider:new({1}, x, y, w, h, col, "label", Font, 16, e.col_grey8, v1,v2, min, max, step)
-local euclidPulsesSldr = e.Vert_Slider:new({3}, ex+(ep*3), ey, ew, eh, e.col_blue, "Puls", Arial, 16, e.col_grey8, 3, 0, 0, 24, 1)
-local euclidStepsSldr = e.Vert_Slider:new({3}, ex+(ep*4), ey, ew, eh, e.col_blue, "Step", Arial, 16, e.col_grey8, 8, 0, 0, 24, 1)
+local euclidPulsesSldr = e.Vert_Slider:new({3}, ex+(ep*3), ey, ew, eh, e.col_blue, "Puls", Arial, 16, e.col_grey8, 3, 0, 1, 24, 1)
+local euclidStepsSldr = e.Vert_Slider:new({3}, ex+(ep*4), ey, ew, eh, e.col_blue, "Step", Arial, 16, e.col_grey8, 8, 0, 1, 24, 1)
 local euclidRotationSldr = e.Vert_Slider:new({3}, ex+(ep*5), ey, ew, eh, e.col_blue, "Rot",  Arial, 16, e.col_grey8, 0, 0, 0, 24, 1)
 local t_euclidSliders = {euclidPulsesSldr, euclidStepsSldr, euclidRotationSldr}
 -- euclid slider label 
@@ -1467,7 +1470,7 @@ scaleDrop.onLClick = function()
 	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
 	-- set project ext state	
-	pExtState.curScaleNum = scaleDrop.val1
+	pExtState.curScaleName = scaleDrop.val2[scaleDrop.val1]
 	pExtSaveStateF = true
 end	
 
@@ -1573,15 +1576,21 @@ function setDefaultScaleOpts()
 		m.oct = math.floor(tonumber(pExtState.oct))
 		octDrop.val1 = m.oct
 	end
+	m.root = SetRootNote(m.oct, m.key)	
 	-- Scale
-	if pExtState.curScaleNum then
-		scaleDrop.val1 = pExtState.curScaleNum
-		m.curScaleName = scaleDrop.val2[scaleDrop.val1]
+	for k, v in pairs(m.scales) do  -- create a scale list for the gui
+		m.scalelist[k] = m.scales[k]["name"]
 	end
-	ConMsg(m.curScaleName)
-	-- apply all
-	m.root = SetRootNote(m.oct, m.key)
-	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
+
+	if pExtState.curScaleName then
+		m.curScaleName = pExtState.curScaleName
+	end
+
+	for k, v in pairs(m.scales) do
+		if v.name == m.curScaleName then scaleDrop.val1 = k	end
+	end	
+
+	SetScale(m.curScaleName, m.scales, m.preNoteProbTable)	--set chosen scale
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
 end
 
@@ -1660,25 +1669,14 @@ function InitMidiExMachina()
 			end -- pExtStateStr
 		end -- pExtLoadStateF
 		
-	-- create the scale list for the gui
-		for k, v in pairs(m.scales) do  -- create a scale list for the gui
-			m.scalelist[k] = m.scales[k]["name"]
-		end	
 	
 	-- set defaults or restore from project state
 	setDefaultScaleOpts()
 	setDefaultRndOptions()
 	setDefaultSeqOptions()
 	setDefaultEucOptions()
-	
-	-- setup up the current scale
-	ClearTable(m.preNoteProbTable); ClearTable(m.preSeqProbTable)
-	GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
-	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)	
+
 	SetSeqGridSizes(t_seqSliders)
-
-
-
 	--set sane default sequencer grid slider values
 	seqGridRad.onLClick()	
 	GetReaperGrid(seqGridRad)
