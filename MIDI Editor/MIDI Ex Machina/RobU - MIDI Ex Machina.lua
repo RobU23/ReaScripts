@@ -50,9 +50,9 @@ Licenced under the GPL v3
 -- REQUIRES
 --------------------------------------------------------------------------------
 package.path = debug.getinfo(1,"S").source:match[[^@?(.*[\/])[^\/]-$]] .."?.lua;".. package.path
-e = require 'eGUI'
-b = require 'euclid'
-p = require 'persistence' -- currently unused, i.e. no save, load, nada...
+local e = require 'eGUI'
+local b = require 'euclid'
+local p = require 'persistence' -- currently unused, i.e. no save, load, nada...
 -- ToDo save, load, etc...
 
 --------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ p = require 'persistence' -- currently unused, i.e. no save, load, nada...
 --------------------------------------------------------------------------------
 m = {} -- all ex machina data
 -- user changable options marked with "(option)"
-m.debug = false
+m.debug = true
 m.msgTimer = 30
 -- window
 m.win_title = "RobU : MIDI Ex Machina - v1.2.1"; m.win_dockstate = 0
@@ -133,9 +133,11 @@ m.preSeqProbTable = {};   m.seqProbTable  = {}
 m.accProbTable = {};      m.octProbTable  = {}
 m.legProbTable = {}
 
-pExtStateF = false -- when true, we need to update the pExtState
+pExtSaveStateF = false -- when true, we need to update the pExtState for saving
+pExtLoadStateF = true -- when true, we need to load the pExtState
 pExtState = {} -- Reaper project ext state 
 pExtStateStr = "" -- pickled string
+
 --------------------------------------------------------------------------------
 -- GLOBAL VARIABLES END
 --------------------------------------------------------------------------------
@@ -590,7 +592,7 @@ end
 --------------------------------------------------------------------------------
 function SetScale(scaleName, allScales, scale)
 	local debug = false
-	if debug or m.debug then ConMsg("SetScale() = " .. scaleName) end
+	if debug or m.debug then ConMsg("SetScale()") end
 	ClearTable(scale)
 	for i = 1, #allScales, 1 do
 		if scaleName == allScales[i].name then
@@ -606,6 +608,7 @@ function SetScale(scaleName, allScales, scale)
 			break
 		end
 	end
+	if debug or m.debug then ConMsg("scaleName = " .. tostring(scaleName)) end
 end
 --------------------------------------------------------------------------------
 -- SetSeqGridSizes()  
@@ -1378,7 +1381,7 @@ noteOptionsCb.onLClick = function()
 	m.rndFirstNoteF = noteOptionsCb.val1[2] == 1 and true or false -- 1st Note Root
 	m.rndOctX2F =     noteOptionsCb.val1[3] == 1 and true or false -- Octave X2
 	pExtState.noteOptionsCb = {m.rndAllNotesF, m.rndFirstNoteF, m.rndOctX2F}
-	pExtStateF = true
+	pExtSaveStateF = true
 	if debug or m.debug then PrintTable(noteOptionsCb.val1) end
 end
 
@@ -1393,7 +1396,7 @@ seqOptionsCb.onLClick = function()
 	m.seqRndNotesF = 	seqOptionsCb.val1[5] == 1 and true or false -- Randomize Notes
 	m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Repeat
 	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
-	pExtStateF = true
+	pExtSaveStateF = true
 	if debug or m.debug then PrintTable(seqOptionsCb.val1) end
 end
 
@@ -1405,7 +1408,7 @@ eucOptionsCb.onLClick = function()
 	m.eucAccentF = 	 eucOptionsCb.val1[2] == 1 and true or false -- Accent
 	m.eucRndNotesF = eucOptionsCb.val1[3] == 1 and true or false -- Randomize notes
 	pExtState.eucOptionsCb = {m.eucF, m.eucAccentF, m.eucRndNotesF}
-	pExtStateF = true
+	pExtSaveStateF = true
 	if debug or m.debug then PrintTable(eucOptionsCb.val1) end
 end
 
@@ -1444,7 +1447,7 @@ keyDrop.onLClick = function()
 	-- set project ext state
 	pExtState.key = m.key
 	pExtState.root = m.root
-	pExtStateF = true
+	pExtSaveStateF = true
 end
 -- Octave
 octDrop.onLClick = function()
@@ -1455,7 +1458,7 @@ octDrop.onLClick = function()
 	-- set project ext state	
 	pExtState.oct = m.oct
 	pExtState.root = m.root
-	pExtStateF = true
+	pExtSaveStateF = true
 end
 -- Scale
 scaleDrop.onLClick = function()
@@ -1464,8 +1467,8 @@ scaleDrop.onLClick = function()
 	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
 	-- set project ext state	
-	pExtState.curScaleName = scaleDrop.val2[scaleDrop.val1]
-	pExtStateF = true
+	pExtState.curScaleNum = scaleDrop.val1
+	pExtSaveStateF = true
 end	
 
 --------------------------------------------------------------------------------
@@ -1571,13 +1574,11 @@ function setDefaultScaleOpts()
 		octDrop.val1 = m.oct
 	end
 	-- Scale
-	local scaleIdx = 0; local scaleName = ""
-	if pExtState.curScaleName then
-		m.curScaleName = pExtState.curScaleName
+	if pExtState.curScaleNum then
+		scaleDrop.val1 = pExtState.curScaleNum
+		m.curScaleName = scaleDrop.val2[scaleDrop.val1]
 	end
-	for k, v in pairs(m.scales) do
-		if v.name == m.curScaleName then scaleDrop.val1 = k	end
-	end
+	ConMsg(m.curScaleName)
 	-- apply all
 	m.root = SetRootNote(m.oct, m.key)
 	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
@@ -1652,10 +1653,17 @@ function InitMidiExMachina()
 	end -- m.activeEditor
 	
 	-- Load ProjectExtState
-		__, pExtStateStr = reaper.GetProjExtState(0, "MEM", "pExtState")
-		if pExtStateStr ~= "" then
-			pExtState = unpickle(pExtStateStr)
-		end
+		if pExtLoadStateF then
+			__, pExtStateStr = reaper.GetProjExtState(0, "MEM", "pExtState")
+			if pExtStateStr ~= "" then
+				pExtState = unpickle(pExtStateStr)
+			end -- pExtStateStr
+		end -- pExtLoadStateF
+		
+	-- create the scale list for the gui
+		for k, v in pairs(m.scales) do  -- create a scale list for the gui
+			m.scalelist[k] = m.scales[k]["name"]
+		end	
 	
 	-- set defaults or restore from project state
 	setDefaultScaleOpts()
@@ -1663,17 +1671,13 @@ function InitMidiExMachina()
 	setDefaultSeqOptions()
 	setDefaultEucOptions()
 	
-	m.root = SetRootNote(m.oct, m.key) -- root note should match the gui..
-	for k, v in pairs(m.scales) do  -- create a scale list for the gui
-		m.scalelist[k] = m.scales[k]["name"]
-	end
-	
 	-- setup up the current scale
 	ClearTable(m.preNoteProbTable); ClearTable(m.preSeqProbTable)
-	SetScale(m.curScaleName, m.scales, m.preNoteProbTable)	--set chosen scale
-	SetSeqGridSizes(t_seqSliders)
-	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
 	GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
+	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)	
+	SetSeqGridSizes(t_seqSliders)
+
+
 
 	--set sane default sequencer grid slider values
 	seqGridRad.onLClick()	
@@ -1727,10 +1731,10 @@ function MainLoop()
 	-- Defer 'MainLoop' if not explicitly quiting (esc)
 	if char ~= -1 and char ~= 27 then 
 		reaper.defer(MainLoop) 
-	elseif pExtStateF then
+	elseif pExtSaveStateF then
 		pExtStateStr = pickle(pExtState)
 		reaper.SetProjExtState(0, "MEM", "pExtState", pExtStateStr )
-		pExtStateF = false
+		pExtSaveStateF = false
 	end
 	
 	-- Update Reaper GFX
