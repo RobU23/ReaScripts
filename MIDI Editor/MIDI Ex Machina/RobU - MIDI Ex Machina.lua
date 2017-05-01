@@ -52,8 +52,8 @@ Licenced under the GPL v3
 package.path = debug.getinfo(1,"S").source:match[[^@?(.*[\/])[^\/]-$]] .."?.lua;".. package.path
 local e = require 'eGUI'
 local b = require 'euclid'
-local p = require 'persistence' -- currently unused, i.e. no save, load, nada...
--- ToDo save, load, etc...
+local p = require 'persistence' -- currently unused, i.e. no preset save, load, nada...
+-- ToDo preset save, load, etc...
 
 --------------------------------------------------------------------------------
 -- GLOBAL VARIABLES START
@@ -1175,7 +1175,6 @@ local seqLegSldrText = e.Textbox:new({2}, sx+(sp * 12), 210, sw, 20, e.col_grey5
 -- Sequencer options
 local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 14) + 10, sy + 5, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0,0,0,0}, {"Generate", "1st Note Always", "Accent", "Legato", "Rnd Notes", "Repeat"})
 -- ToDo Repeat
-
 --------------------------------------------------------------------------------
 -- Euclid Layer
 --------------------------------------------------------------------------------
@@ -1211,9 +1210,6 @@ local t_RadButtons = {seqGridRad}
 local t_RSliders = {octProbSldr, seqAccRSldr, seqAccProbSldr, seqLegProbSldr}
 local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqAccSldrText, seqLegSldrText, txtEuclidLabel, optText, msgText}
 --------------------------------------------------------------------------------
--- errors and messages, all screens
-	-- textbox
-	-- botton
 
 --------------------------------------------------------------------------------
 -- GUI Element Functions START
@@ -1254,7 +1250,7 @@ layerBtn02.onLClick = function() -- sequencer
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a  = table.unpack(e.col_grey5)
 end
 -- Layer 3
-layerBtn03.onLClick = function() -- euclidean sequencer
+layerBtn03.onLClick = function() -- euclidean
 	local debug = false
 	if debug or m.debug then ConMsg("\nlayerBtn03.onLClick() (euclid)") end
 	e.gActiveLayer = 3
@@ -1347,7 +1343,6 @@ sequenceBtn.onLClick = function()
 		end  -- m.seqF
 	end  --m.activeTake
 end
-
 -- Euclid
 euclidBtn.onLClick = function()
 	local debug = false
@@ -1422,7 +1417,7 @@ end
 zoomDrop.onLClick = function() -- window scaling
 	local debug = false
 	if debug or m.debug then ConMsg("\nzoomDrop.onLClick()") end
-	if zoomDrop.val1 ==  1 then e.gScale = 0.7
+	    if zoomDrop.val1 ==  1 then e.gScale = 0.7
 	elseif zoomDrop.val1 ==  2 then e.gScale = 0.8
 	elseif zoomDrop.val1 ==  3 then e.gScale = 0.9
 	elseif zoomDrop.val1 ==  4 then e.gScale = 1  
@@ -1437,6 +1432,11 @@ zoomDrop.onLClick = function() -- window scaling
 	-- Save state, close and reopen GFX window
 	__, m.win_x, m.win_y, __, __ = gfx.dock(-1,0,0,0,0)
 	e.gScaleState = true
+	-- set project ext state
+	pExtState.zoomDrop = zoomDrop.val1
+	pExtState.gScale = e.gScale
+	pExtState.gScaleState = e.gScaleState
+	-- resize
 	gfx.quit()
 	InitGFX()
 end
@@ -1560,60 +1560,64 @@ end
 -- INIT
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
--- Init Functions (GUI)
+-- Init Functions
 --------------------------------------------------------------------------------
-
-function setDefaultScaleOpts()
-	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultScaleOpts()") end
-	-- Key
-	if pExtState.key then
-		m.key = math.floor(tonumber(pExtState.key))
-		keyDrop.val1 = m.key
-	end
-	-- Octave
-	if pExtState.oct then
-		m.oct = math.floor(tonumber(pExtState.oct))
-		octDrop.val1 = m.oct
-	end
-	m.root = SetRootNote(m.oct, m.key)	
-	-- Scale
-	for k, v in pairs(m.scales) do  -- create a scale list for the gui
-		m.scalelist[k] = m.scales[k]["name"]
-	end
-
-	if pExtState.curScaleName then
-		m.curScaleName = pExtState.curScaleName
-	end
-
-	for k, v in pairs(m.scales) do
-		if v.name == m.curScaleName then scaleDrop.val1 = k	end
-	end	
-
-	SetScale(m.curScaleName, m.scales, m.preNoteProbTable)	--set chosen scale
-	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
-end
-
 --[[
 ToDo - make these right click functions (layers, sliders, radio/checkbox)
 zoomDrop.onRClick = function()
 end
 --]]
+function setDefaultScaleOpts()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultScaleOpts()") end
+	-- if key saved in project state, load it
+	if pExtState.key then 
+		m.key = math.floor(tonumber(pExtState.key))
+		keyDrop.val1 = m.key
+	end
+	-- if octave saved in project state, load it
+	if pExtState.oct then 
+		m.oct = math.floor(tonumber(pExtState.oct))
+		octDrop.val1 = m.oct
+	end
+	-- set the midi note number for scale root
+	m.root = SetRootNote(m.oct, m.key) 
+	-- create a scale name lookup table for the gui (scaleDrop)
+	for k, v in pairs(m.scales) do
+		m.scalelist[k] = m.scales[k]["name"]
+	end
+	-- if scale name saved in project state, load it
+	if pExtState.curScaleName then
+		m.curScaleName = pExtState.curScaleName
+	end
+	-- update the scale dropbox val1 to match the scale table index
+	for k, v in pairs(m.scales) do 
+		if v.name == m.curScaleName then scaleDrop.val1 = k	end
+	end	
+
+	SetScale(m.curScaleName, m.scales, m.preNoteProbTable)	--set chosen scale
+	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable) -- set sliders labels to current scale notes
+end
+--------------------------------------------------------------------------------
 function setDefaultRndOptions()
 	local debug = false
 	if debug or m.debug then ConMsg("setDefaultRndOptions()") end
+	-- if randomizer options were saved to project state, load them
 	if pExtState.noteOptionsCb then
 		m.rndAllNotesF =  pExtState.noteOptionsCb[1] == true and true or false 
 		m.rndFirstNoteF = pExtState.noteOptionsCb[2] == true and true or false
 		m.rndOctX2F =     pExtState.noteOptionsCb[3] == true and true or false
 		end
+	-- set randomizer options using defaults, or loaded project state
 	noteOptionsCb.val1[1] = (true and m.rndAllNotesF) and 1 or 0 -- all notes
 	noteOptionsCb.val1[2] = (true and m.rndFirstNoteF) and 1 or 0 -- first note root
 	noteOptionsCb.val1[3] = (true and m.rndOctX2F) and 1 or 0 -- octave doubler
 end
+--------------------------------------------------------------------------------
 function setDefaultSeqOptions()
 	local debug = false
 	if debug or m.debug then ConMsg("setDefaultSeqOptions()") end
+	-- if sequencer options were saved to project state, load them
 	if pExtState.seqOptionsCb then 
 		m.seqF = 					pExtState.seqOptionsCb[1] ==  true and true or false
 		m.seqFirstNoteF = pExtState.seqOptionsCb[2] ==  true and true or false
@@ -1622,6 +1626,7 @@ function setDefaultSeqOptions()
 		m.seqRndNotesF = 	pExtState.seqOptionsCb[5] ==  true and true or false
 		m.seqRepeatF = 		pExtState.seqOptionsCb[6] ==  true and true or false
 	end
+	-- set sequencer options using defaults, or loaded project state
 	seqOptionsCb.val1[1] = (true and m.seqF) and 1 or 0 -- generate
 	seqOptionsCb.val1[2] = (true and m.seqFirstNoteF) and 1 or 0 -- 1st Note Always
 	seqOptionsCb.val1[3] = (true and m.seqAccentF) and 1 or 0 -- accent
@@ -1629,14 +1634,17 @@ function setDefaultSeqOptions()
 	seqOptionsCb.val1[5] = (true and m.seqRndNotesF) and 1 or 0 -- random notes
 	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0 -- repeat
 end
+--------------------------------------------------------------------------------
 function setDefaultEucOptions()
 	local debug = false
 	if debug or m.debug then ConMsg("setDefaultEucOptions()") end
+	-- if euclidean options were saved to project state, load them
 	if pExtState.eucOptionsCb then 
 		m.eucF = 					pExtState.eucOptionsCb[1] ==  true and true or false
 		m.eucAccentF = 		pExtState.eucOptionsCb[2] ==  true and true or false
 		m.eucRndNotesF = 	pExtState.eucOptionsCb[3] ==  true and true or false
 	end
+	-- set euclidean options using defaults, or loaded project state
 	eucOptionsCb.val1[1] = (true and m.eucF) and 1 or 0 -- generate
 	eucOptionsCb.val1[2] = (true and m.eucAccentF) and 1 or 0 -- accents
 	eucOptionsCb.val1[3] = (true and m.eucRndNotesF) and 1 or 0 -- randomize notes
@@ -1669,7 +1677,6 @@ function InitMidiExMachina()
 			end -- pExtStateStr
 		end -- pExtLoadStateF
 		
-	
 	-- set defaults or restore from project state
 	setDefaultScaleOpts()
 	setDefaultRndOptions()
@@ -1704,9 +1711,9 @@ end
 function MainLoop()
 	-- Update mouse state and position
 	if gfx.mouse_cap & 1 == 1   and gLastMouseCap & 1 == 0  or		-- L mouse
-		gfx.mouse_cap & 2 == 2   and gLastMouseCap & 2 == 0  or		-- R mouse
-		gfx.mouse_cap & 64 == 64 and gLastMouseCap & 64 == 0 then	-- M mouse
-		gMouseOX, gMouseOY = gfx.mouse_x, gfx.mouse_y 
+		 gfx.mouse_cap & 2 == 2   and gLastMouseCap & 2 == 0  or		-- R mouse
+		 gfx.mouse_cap & 64 == 64 and gLastMouseCap & 64 == 0 then	-- M mouse
+		 gMouseOX, gMouseOY = gfx.mouse_x, gfx.mouse_y 
 	end
 	
 	-- Set modifier keys
@@ -1738,7 +1745,7 @@ function MainLoop()
 	-- Update Reaper GFX
 	gfx.update()
 	
-	-- editor status checks
+	-- midi editor and take status checks
 	m.activeEditor = reaper.MIDIEditor_GetActive()
 	if m.activeEditor then
 		m.activeTake = reaper.MIDIEditor_GetTake(m.activeEditor)
@@ -1774,7 +1781,7 @@ function MainLoop()
 		m.activeEditor = nil
 		m.activeTake = nil
 	end -- m.activeEditor
-	
+	ConMsg("e.gScaleState = " .. tostring(e.gScaleState))
 	e.gScaleState = true
 end
 --------------------------------------------------------------------------------
