@@ -1089,15 +1089,15 @@ local swingTicks = GetSwingTicks(ppqn, grid, swingpc)
 -- Main Window
 --------------------------------------------------------------------------------
 -- Persistent window elements
-local zoomDrop = e.Droplist:new({0}, 5, 5, 40, 22, e.col_green, "", e.Arial, 16, e.col_grey8, 4, {"70%", "80%", "90%", "100%", "110%", "120%", "140%", "160%", "180%", "200%"})
 local winFrame = e.Frame:new({0}, 5, 5, m.win_w - 10, m.win_h - 10, e.col_grey4)
+local zoomDrop = e.Droplist:new({0}, 5, 5, 40, 22, e.col_green, "", e.Arial, 16, e.col_grey8, 4, {"70%", "80%", "90%", "100%", "110%", "120%", "140%", "160%", "180%", "200%"})
 local winText = e.Textbox:new({0}, 45, 5, m.win_w - 50, 22, e.col_green, "MIDI Ex Machina    ", e.Arial, 16, e.col_grey8)
 local layerBtn01 = e.Button:new({0}, 5, m.win_h - 25, 100, 20, e.col_green, "Notes", e.Arial, 16, e.col_grey8)
 local layerBtn02 = e.Button:new({0}, 105, m.win_h - 25, 100, 20, e.col_grey5, "Sequencer", e.Arial, 16, e.col_grey7)
 local layerBtn03 = e.Button:new({0}, 205, m.win_h - 25, 100, 20, e.col_grey5, "Euclid", e.Arial, 16, e.col_grey7)
 local layerBtn04 = e.Button:new({0}, 305, m.win_h - 25, 100, 20, e.col_grey5, "Options", e.Arial, 16, e.col_grey7)
-local undoBtn = e.Button:new({0}, m.win_w-90, m.win_h -25, 40, 20, e.col_grey5, "Undo", e.Arial, 16, e.col_grey7)
-local redoBtn = e.Button:new({0}, m.win_w-50, m.win_h -25, 40, 20, e.col_grey5, "Redo", e.Arial, 16, e.col_grey7)
+local undoBtn = e.Button:new({0}, m.win_w-85, m.win_h -25, 40, 20, e.col_grey5, "Undo", e.Arial, 16, e.col_grey7)
+local redoBtn = e.Button:new({0}, m.win_w-45, m.win_h -25, 40, 20, e.col_grey5, "Redo", e.Arial, 16, e.col_grey7)
 -- Persistent window element table
 t_winElements = {zoomDrop, winFrame, winText, layerBtn01, layerBtn02, layerBtn03, layerBtn04, undoBtn, redoBtn}
 
@@ -1430,12 +1430,14 @@ zoomDrop.onLClick = function() -- window scaling
 	end
 	if debug or m.debug then ConMsg("zoom = " .. tostring(e.gScale)) end
 	-- Save state, close and reopen GFX window
-	__, m.win_x, m.win_y, __, __ = gfx.dock(-1,0,0,0,0)
+	if not pExtState.win_x then
+		__, m.win_x, m.win_y, __, __ = gfx.dock(-1,0,0,0,0)
+	end
 	e.gScaleState = true
 	-- set project ext state
 	pExtState.zoomDrop = zoomDrop.val1
-	pExtState.gScale = e.gScale
-	pExtState.gScaleState = e.gScaleState
+	--pExtState.gScale = e.gScale
+	pExtSaveStateF = true
 	-- resize
 	gfx.quit()
 	InitGFX()
@@ -1560,13 +1562,26 @@ end
 -- INIT
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
--- Init Functions
+-- Init / ProjectExtState Load Functions
 --------------------------------------------------------------------------------
 --[[
 ToDo - make these right click functions (layers, sliders, radio/checkbox)
 zoomDrop.onRClick = function()
 end
 --]]
+function setDefaultWindowOpts()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultWinOpts()") end
+	if pExtState.zoomDrop then
+		zoomDrop.val1 = pExtState.zoomDrop
+	end
+	if pExtState.win_x or pExtState.win_y then
+		m.win_x = pExtState.win_x
+		m.win_y = pExtState.win_y
+	end
+	zoomDrop.onLClick()
+end
+--------------------------------------------------------------------------------
 function setDefaultScaleOpts()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultScaleOpts()") end
@@ -1678,6 +1693,7 @@ function InitMidiExMachina()
 		end -- pExtLoadStateF
 		
 	-- set defaults or restore from project state
+	setDefaultWindowOpts()
 	setDefaultScaleOpts()
 	setDefaultRndOptions()
 	setDefaultSeqOptions()
@@ -1729,6 +1745,15 @@ function MainLoop()
 	gLastMouseX, gLastMouseY = gfx.mouse_x, gfx.mouse_y
 	gfx.mouse_wheel = 0 -- reset gfx.mouse_wheel
 	
+	-- Check and save window position
+		__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
+
+		if m.win_x ~= pExtState.win_x or m.win_y ~= pExtState.win_y then	
+			m.win_x = pExtState.win_x
+			m.win_y = pExtState.win_y
+			pExtSaveStateF = true
+		end
+		
 	-- Set passthrough keys for play/stop
 	char = gfx.getchar()
 	if char == 32 then reaper.Main_OnCommand(40044, 0) end
@@ -1781,13 +1806,15 @@ function MainLoop()
 		m.activeEditor = nil
 		m.activeTake = nil
 	end -- m.activeEditor
-	ConMsg("e.gScaleState = " .. tostring(e.gScaleState))
-	e.gScaleState = false
+
+	e.gScaleState = true
 end
 --------------------------------------------------------------------------------
 -- RUN
 --------------------------------------------------------------------------------
-InitGFX()
+
+
 InitMidiExMachina()
+InitGFX()
 MainLoop()
 --------------------------------------------------------------------------------
