@@ -147,6 +147,24 @@ pExtStateStr = "" -- pickled string. a nom a nom a nom...
 -- Utility Functions Start
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
+-- Bitfields - set, clear, flip, check - return the new bitfield, or bool for check
+--------------------------------------------------------------------------------
+local function BitSet(val, bitIdx)
+	val = val | (1 << bitIdx); return val
+end
+--------------------------------------------------------------------------------
+local function BitClear(val, bitIdx)
+	val = val & ~(1 << bitIdx); return val
+end
+--------------------------------------------------------------------------------
+local function BitFlip(val, bitIdx)
+	val = val ~ (1 << bitIdx); return val
+end
+--------------------------------------------------------------------------------
+local function BitCheck(val, bitIdx)
+  return (val & (1 << bitIdx) ~= 0) and true or false
+end
+--------------------------------------------------------------------------------
 -- Wrap(n, max) -return n wrapped between 'n' and 'max'
 --------------------------------------------------------------------------------
 local function Wrap (n, max)
@@ -688,39 +706,6 @@ function GetUniqueNote(tNotes, noteIdx, noteProbTable, octProbTable)
 	end -- if #m.dupes
 end
 --------------------------------------------------------------------------------
--- RandomizeNotesMono(notebufs t1,t2, noteProbTable)
--- transforms t1 to t2 via noteProbTable
---------------------------------------------------------------------------------
-function RandomizeNotesMono(noteProbTable)
-	local debug = false
-	if debug or m.debug then ConMsg("RandomizeNotesMono()") end
-	i = 1
-	local t1, t2 = GetNoteBuf(), NewNoteBuf()
-	selected, muted, startppq, endppq, pitch, velocity = "true", "false", 0, 0, 0, 127
-	while t1[i] do
-		t2[i] = {}	
-		t2[i][1] = t1[i][1] --selected
-		t2[i][2] = t1[i][2] --muted
-		t2[i][3] = t1[i][3] --startppq
-		t2[i][4] = t1[i][4] --endppq
-		t2[i][5] = t1[i][5] --length
-		t2[i][6] = t1[i][6] --channel
-		if t1[i][1] == true then
-			t2[i][7] = m.root + noteProbTable[math.random(1,#noteProbTable)] --pitch  
-		else
-			t2[i][7] = t1[i][7]
-		end
-		t2[i][8] = t1[i][8] --velocity/accent
-		i = i + 1
-	end -- while t1[i]
-	--if debug then PrintNotes(t2) end
-	SetNotes()
-	if m.rndPermuteF and m.activeTake then 
-		__, pHash = reaper.MIDI_GetHash(m.activeTake, false, 0)
-		m.pHash = pHash
-	end
-end
---------------------------------------------------------------------------------
 -- RandomizeNotesPoly(notebufs t1,t2, noteProbTable)
 --------------------------------------------------------------------------------
 function RandomizeNotesPoly(noteProbTable)
@@ -949,7 +934,7 @@ end
 --------------------------------------------------------------------------------
 -- PrintNotes - arg note_buffer t; print note_buffer to reaper console
 --------------------------------------------------------------------------------
-function PrintNotes(t)
+function PrintNotes(t) -- debug code
 	local debug = false
 	if debug or m.debug then ConMsg("PrintNotes()") end
 	local i = 1
@@ -969,7 +954,7 @@ end
 --------------------------------------------------------------------------------
 -- PrintTable - print table to reaper console
 --------------------------------------------------------------------------------
-function PrintTable(t)
+function PrintTable(t) -- debug code
 	local debug = false
 	if debug or m.debug then ConMsg("PrintTable()") end
 	local str = ""
@@ -990,101 +975,19 @@ function ShowMessage(tb, msgNum)
 		tb.label = ""
 	elseif msgNum == 1 then 
 		tb.tab = 0
-		tb.label = "No Active Take"  
+		tb.label = "No Active Take" 
 	end
+	e.gScaleState = true
 end
-
---[[
---------------------------------------------------------------------------------
--- Experimental Swing Code
---------------------------------------------------------------------------------
---[[ Swing Explanation
-MIDI 'swing'  -- every 2nd grid position can be 'swung' by 1/2 of 1 grid position either left or right (total == 1 grid pos)
-PPQN (pulses per quarter note) default in REAPER is 960; function(p)
-GRID is in decimal quarter notes; e.g. 0.25 = 1/16th (1/4 of 1/4); function(g)
-SWINGPC is a % from -100% to 100%.  If using values from 0-1, the conversion is ((s - 0.5) * 200); function(s)
-swingTicks is the amount of ppqn to shift the note (positive or negative)
---]]
---[[ Swing How-to
-to find every 2nd note position; start at grid position 2 (== grid_size), then add double the grid size each time, until the the end of the note array.
-the note will lie somewhere between -50 and 50 % of the grid size e.g.
-	if note_start > curr_grid_pos - max_swing_val and note_start < curr_grid_pos + max_swing_val then
-		note_start = curr_grid_pos + swing
-	end
---]]
---------------------------------------------------------------------------------
-local function SwingNotes(noteTable, p, g, st)
-	local gridSize = p * g  -- grid size in ticks
-	local gridPos  = gridSize -- 1st swing grid position
-	local gridStep = gridSize * 2 -- offset to next swing grid position
-	local maxSwing = gridSize / 2 -- max swing is +/-50% of the grid size
-	local itemLen  = gridSize * 16 -- get this from reaper api
-	local noteLen	 = 0
-	sth="gd : "..gridSize.."\tcgp : "..gridPos.."\tgs : " .. gridStep.."\tmsv : "..maxSwing.."\tst : "..st.."\til : "..itemLen
-	for k, v in pairs(noteTable) do
-		for gridPos = gridSize, (itemLen-gridSize), gridStep do --
-			if v[1] >= (gridPos - maxSwing) and v[1] <= (gridPos + maxSwing) then
-				noteLen = v[2] - v[1]
-				--print("start = " .. v[1] .. "\tend = " .. v[2] .. "\tlen = " .. (v[2] - v[1]) .. "\t- pre-swing")
-				v[1] = gridPos + st  --noteStart
-				v[2] = v[1] + noteLen  --noteEnd but check for end of item...
-				--print("start = " .. v[1] .. "\tend = " .. v[2] .. "\tlen = " .. (v[2] - v[1]) .. "\t- post-swing")
-			end
-		end
-	end
-end
---------------------------------------------------------------------------------
-local function PrintNotes2(noteTable)
-	local str = ""  
-	for k, v in pairs(noteTable) do
-		if type(v) == "table" then 
-			PrintNotes(v)
-		else 
-			str = str .. tostring(v).."\t" 
-		end
-	end
-	--print(str)
-end
---------------------------------------------------------------------------------
-local function GetGridSize (p, g) -- (ppqn, g)
-	return p * g
-end
---------------------------------------------------------------------------------
--- GetSwingTicks(p, g, s) args; int ppqn, float grid, int swing%; returns; int swing ticks(ppqn)
---------------------------------------------------------------------------------
-local function GetSwingTicks(p, g, s)
-	return math.floor(p * g * s * 0.005)
-end
---------------------------------------------------------------------------------
-local notez = { 
-	{0,     240, 240}, 
-	{240,   480, 240}, 
-	{480,   720, 240},
-	{720,   960, 240},
-	{960,  1200, 240},
-	{1200, 1440, 240},
-	{1440, 1680, 240},
-	{1920, 2160, 240},
-	{2160, 2400, 240}
-}
-local ppqn = 960 -- default REAPER value; how to check ?
-local grid = 0.25 -- 1/16th note (4 / 16) set by user (droplist, or from REAPER ME)
-local swingpc = -23 -- set by user (slider)
-local swingTicks = GetSwingTicks(ppqn, grid, swingpc)
-
---------------------------------------------------------------------------------
--- Experimental Swing Code End
---------------------------------------------------------------------------------
---]]
 --------------------------------------------------------------------------------
 -- FUNCTIONS END
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
--- GUI Layout START
+-- GUI START
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
--- Create GUI Elements
+-- MiDi Ex Machina - GUI Elements
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 -- Main Window
@@ -1100,7 +1003,7 @@ local layerBtn04 = e.Button:new({0}, 305, m.win_h - 25, 100, 20, e.col_grey5, "O
 local undoBtn = e.Button:new({0}, m.win_w-85, m.win_h -25, 40, 20, e.col_grey5, "Undo", e.Arial, 16, e.col_grey7)
 local redoBtn = e.Button:new({0}, m.win_w-45, m.win_h -25, 40, 20, e.col_grey5, "Redo", e.Arial, 16, e.col_grey7)
 -- Persistent window element table
-t_winElements = {zoomDrop, winFrame, winText, layerBtn01, layerBtn02, layerBtn03, layerBtn04, undoBtn, redoBtn}
+t_winElements = {winFrame, zoomDrop, winText, layerBtn01, layerBtn02, layerBtn03, layerBtn04, undoBtn, redoBtn}
 
 --------------------------------------------------------------------------------
 -- Common Elements
@@ -1143,6 +1046,7 @@ local octProbText = e.Textbox:new({1}, nx+(np*13) + 10, 210, (nw), 20, e.col_gre
 -- Note randomiser options
 local noteOptionsCb = e.Checkbox:new({1}, nx+(np*14)+10, ny+30, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0},   {"All / Sel Notes", "1st Note = Root", "Octave X2"})
 local noteOptionText = e.Textbox:new({1}, nx+(np*14)+20, 210, (nw*4), 20, e.col_grey5, "Options", e.Arial, 16, e.col_grey7)
+
 --------------------------------------------------------------------------------
 -- Sequencer Layer
 --------------------------------------------------------------------------------
@@ -1176,6 +1080,7 @@ local seqLegSldrText = e.Textbox:new({2}, sx+(sp * 12), 210, sw, 20, e.col_grey5
 -- Sequencer options
 local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 14) + 10, sy + 5, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0,0,0,0}, {"Generate", "1st Note Always", "Accent", "Legato", "Rnd Notes", "Repeat"})
 -- ToDo Repeat
+
 --------------------------------------------------------------------------------
 -- Euclid Layer
 --------------------------------------------------------------------------------
@@ -1202,6 +1107,7 @@ local optText = e.Textbox:new({4}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.w
 -- Messages Layer
 --------------------------------------------------------------------------------
 local msgText = e.Textbox:new({9}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.win_h - 80, e.col_greym, "", e.Arial, 22, e.col_grey9)
+
 --------------------------------------------------------------------------------
 -- Shared Element Tables
 --------------------------------------------------------------------------------
@@ -1213,10 +1119,10 @@ local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqAcc
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
--- GUI Element Functions START
+-- GUI Functions START
 -------------------------------------------------------------------------------- 
 --------------------------------------------------------------------------------
--- Button Functions
+-- Buttons
 --------------------------------------------------------------------------------
 -- Layer 1
 layerBtn01.onLClick = function() -- randomizer
@@ -1233,6 +1139,7 @@ layerBtn01.onLClick = function() -- randomizer
 	layerBtn03.r, layerBtn03.g, layerBtn03.b, layerBtn03.a = table.unpack(e.col_grey5)
 	layerBtn04.font_rgba = e.col_grey7
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey5)
+	e.gScaleState = true
 end
 -- Layer 2
 layerBtn02.onLClick = function() -- sequencer
@@ -1249,6 +1156,7 @@ layerBtn02.onLClick = function() -- sequencer
 	layerBtn03.r, layerBtn03.g, layerBtn03.b, layerBtn03.a = table.unpack(e.col_grey5)
 	layerBtn04.font_rgba = e.col_grey7
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a  = table.unpack(e.col_grey5)
+	e.gScaleState = true
 end
 -- Layer 3
 layerBtn03.onLClick = function() -- euclidean
@@ -1265,6 +1173,7 @@ layerBtn03.onLClick = function() -- euclidean
 	layerBtn03.r, layerBtn03.g, layerBtn03.b, layerBtn03.a = table.unpack(e.col_orange)
 	layerBtn04.font_rgba = e.col_grey7
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey5)
+	e.gScaleState = true
 end
 -- Layer 4
 layerBtn04.onLClick = function() -- options
@@ -1281,6 +1190,7 @@ layerBtn04.onLClick = function() -- options
 	layerBtn03.r, layerBtn03.g, layerBtn03.b, layerBtn03.a = table.unpack(e.col_grey5)
 	layerBtn04.font_rgba = e.col_grey8 -- highlight layer 4
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey6)
+	e.gScaleState = true
 end
 -- Undo
 undoBtn.onLClick = function() -- undo
@@ -1313,6 +1223,12 @@ randomBtn.onLClick = function()
 		GenOctaveTable(m.octProbTable, octProbSldr)
 		GetNotesFromTake() 
 		RandomizeNotesPoly(m.noteProbTable)
+			-- set project ext state	
+	pExtState.noteSliders = {}
+	for k, v in pairs(t_noteSliders) do
+		pExtState.noteSliders[k] = v.val1
+	end
+	pExtSaveStateF = true
 	end --m.activeTake
 end 
 -- Sequence
@@ -1367,10 +1283,16 @@ euclidBtn.onLClick = function()
 				randomBtn.onLClick() -- call RandomizeNotes
 			end    
 		end -- m.eucF
+		-- set project ext state		
+		pExtState.eucSliders = {}
+		for k, v in pairs(t_euclidSliders) do
+			pExtState.eucSliders[k] = v.val1
+		end
+		pExtSaveStateF = true
 	end -- m.activeTake
 end
 --------------------------------------------------------------------------------
--- Checkbox and Toggle functions
+-- Checkboxes and Toggles
 --------------------------------------------------------------------------------
 -- Note randomizer options toggle logic
 noteOptionsCb.onLClick = function()
@@ -1412,7 +1334,7 @@ eucOptionsCb.onLClick = function()
 end
 
 --------------------------------------------------------------------------------
--- Droplist Functions
+-- Droplists
 --------------------------------------------------------------------------------
 -- Window zoom
 zoomDrop.onLClick = function() -- window scaling
@@ -1475,7 +1397,7 @@ scaleDrop.onLClick = function()
 end	
 
 --------------------------------------------------------------------------------
--- Radio Button Functions
+-- Radio Buttons
 --------------------------------------------------------------------------------
 seqGridRad.onLClick = function() -- change grid size
 	local debug = false
@@ -1494,7 +1416,7 @@ seqGridRad.onLClick = function() -- change grid size
 	end -- m.activeTake
 end
 --------------------------------------------------------------------------------
--- Slider Functions
+-- Sliders
 --------------------------------------------------------------------------------
 -- Euclid pulses slider 
 euclidPulsesSldr.onMove = function()
@@ -1532,41 +1454,8 @@ euclidRotationSldr.onMove = function()
 end
 
 --------------------------------------------------------------------------------
--- GUI Element Functions END
+-- Init GUI ProjectExtState Load Functions
 --------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- GUI Layout END
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- GUI - Main DRAW function
---------------------------------------------------------------------------------
-function DrawGUI()
-	for key, winElms in pairs(t_winElements) do winElms:draw() end
-	--for key, frame in pairs(t_Frames) do frame:draw() end 
-	for key, check in pairs(t_Checkboxes) do check:draw() end
-	for key, radio in pairs(t_RadButtons) do radio:draw() end	
-	for key, btn in pairs(t_Buttons) do btn:draw() end
-	for key, dlist in pairs(t_Droplists) do dlist:draw() end 
-	--for key, knb in pairs(t_Knobs) do knb:draw() end
-	for key, rsliders in pairs(t_RSliders) do rsliders:draw() end
-	for key, nsldrs in pairs(t_noteSliders) do nsldrs:draw() end
-	for key, ssldrs in pairs(t_seqSliders) do ssldrs:draw() end
-	for key, esldrs in pairs(t_euclidSliders) do esldrs:draw() end
-	for key, textb in pairs(t_Textboxes) do textb:draw() end
-end
---------------------------------------------------------------------------------
--- INIT
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
--- Init / ProjectExtState Load Functions
---------------------------------------------------------------------------------
---[[
-ToDo - make these right click functions (layers, sliders, radio/checkbox)
-zoomDrop.onRClick = function()
-end
---]]
 function setDefaultWindowOpts()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultWinOpts()") end
@@ -1663,6 +1552,68 @@ function setDefaultEucOptions()
 	eucOptionsCb.val1[3] = (true and m.eucRndNotesF) and 1 or 0 -- randomize notes
 end
 --------------------------------------------------------------------------------
+function setDefaultRndSliders()
+	local debug = false
+	if debug or m.debug then ConMsg("setDefaultRndSliders()") end
+	-- if randomizer sliders were saved to project state, load them
+	if pExtState.noteSliders then
+		for k, v in pairs(t_noteSliders) do
+			v.val1 = pExtState.noteSliders[k]
+		end
+	else
+		for k, v in pairs(t_noteSliders) do
+			v.val1 = 1
+		end
+	end -- load pExtState
+end
+--------------------------------------------------------------------------------
+function setDefaultSeqSliders()
+	local debug = false
+	if debug or m.debug then ConMsg("setDefaultSeqSliders()") end
+end
+--------------------------------------------------------------------------------
+function setDefaultEucSliders()
+	local debug = false
+	if debug or m.debug then ConMsg("setDefaultEucSliders()") end
+	-- if euclidean sliders were saved to project state, load them
+	if pExtState.eucSliders then
+		for k, v in pairs(t_euclidSliders) do
+			v.val1 = pExtState.eucSliders[k]
+		end
+	else
+		euclidPulsesSldr.val1 = 3
+		euclidStepsSldr.val1 = 8
+		euclidRotationSldr.val1 = 0
+	end -- load pExtState
+end
+--------------------------------------------------------------------------------
+-- Draw GUI
+--------------------------------------------------------------------------------
+function DrawGUI()
+	for key, winElms in pairs(t_winElements) do winElms:draw() end
+	--for key, frame in pairs(t_Frames) do frame:draw() end 
+	for key, check in pairs(t_Checkboxes) do check:draw() end
+	for key, radio in pairs(t_RadButtons) do radio:draw() end	
+	for key, btn in pairs(t_Buttons) do btn:draw() end
+	for key, dlist in pairs(t_Droplists) do dlist:draw() end 
+	--for key, knb in pairs(t_Knobs) do knb:draw() end
+	for key, rsliders in pairs(t_RSliders) do rsliders:draw() end
+	for key, nsldrs in pairs(t_noteSliders) do nsldrs:draw() end
+	for key, ssldrs in pairs(t_seqSliders) do ssldrs:draw() end
+	for key, esldrs in pairs(t_euclidSliders) do esldrs:draw() end
+	for key, textb in pairs(t_Textboxes) do textb:draw() end
+end
+--------------------------------------------------------------------------------
+-- GUI Functions END
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- GUI END
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- INIT
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- InitMidiExMachina
 --------------------------------------------------------------------------------
 function InitMidiExMachina()
@@ -1690,12 +1641,14 @@ function InitMidiExMachina()
 			end -- pExtStateStr
 		end -- pExtLoadStateF
 		
-	-- set defaults or restore from project state
+	-- set GUI defaults or restore from project state
 	setDefaultWindowOpts()
 	setDefaultScaleOpts()
 	setDefaultRndOptions()
+	setDefaultRndSliders()
 	setDefaultSeqOptions()
 	setDefaultEucOptions()
+	setDefaultEucSliders()
 
 	SetSeqGridSizes(t_seqSliders)
 	--set sane default sequencer grid slider values
@@ -1814,8 +1767,6 @@ end
 --------------------------------------------------------------------------------
 -- RUN
 --------------------------------------------------------------------------------
-
-
 InitMidiExMachina()
 InitGFX()
 MainLoop()
