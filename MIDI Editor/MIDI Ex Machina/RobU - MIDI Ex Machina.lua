@@ -68,6 +68,7 @@ m.win_x = 10; m.win_y = 10; m.win_w = 900; m.win_h = 300 -- window dimensions
 m.win_bg = {0, 0, 0} -- background colour
 m.def_zoom = 4 -- 100% (option)
 -- zoom values are 1=70, 2=80, 3=90, 4=100, 5=110%, 6=120, 7=140, 8=160, 9=180, 10=200
+m.zoomF = false
 
 -- default octave, key, and root (root = octave + key)
 -- due to some quirk, oct 4 is really oct 3...
@@ -1432,15 +1433,12 @@ zoomDrop.onLClick = function() -- window scaling
 	-- Save state, close and reopen GFX window
 	if not pExtState.win_x then
 		__, m.win_x, m.win_y, __, __ = gfx.dock(-1,0,0,0,0)
+	else
+		-- set project ext state
+		pExtState.zoomDrop = zoomDrop.val1
+		pExtSaveStateF = true		
 	end
-	e.gScaleState = true
-	-- set project ext state
-	pExtState.zoomDrop = zoomDrop.val1
-	--pExtState.gScale = e.gScale
-	pExtSaveStateF = true
-	-- resize
-	gfx.quit()
-	InitGFX()
+	m.zoomF = true
 end
 -- Root Key
 keyDrop.onLClick = function()
@@ -1726,56 +1724,62 @@ end
 --------------------------------------------------------------------------------
 function MainLoop()
 	-- Update mouse state and position
-	if gfx.mouse_cap & 1 == 1   and gLastMouseCap & 1 == 0  or		-- L mouse
-		 gfx.mouse_cap & 2 == 2   and gLastMouseCap & 2 == 0  or		-- R mouse
-		 gfx.mouse_cap & 64 == 64 and gLastMouseCap & 64 == 0 then	-- M mouse
+	if gfx.mouse_cap & 1 == 1   and gLastMouseCap & 1  == 0 or    -- L mouse
+		 gfx.mouse_cap & 2 == 2   and gLastMouseCap & 2  == 0 or    -- R mouse
+		 gfx.mouse_cap & 64 == 64 and gLastMouseCap & 64 == 0 then  -- M mouse
 		 gMouseOX, gMouseOY = gfx.mouse_x, gfx.mouse_y 
 	end
 	
 	-- Set modifier keys
-	Ctrl  = gfx.mouse_cap & 4 == 4
-	Shift = gfx.mouse_cap & 8 == 8
+	Ctrl  = gfx.mouse_cap & 4  == 4
+	Shift = gfx.mouse_cap & 8  == 8
 	Alt   = gfx.mouse_cap & 16 == 16
 	
-	-- Update and draw eGUI
+	-- Check and save window position
+	__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
+	if m.win_x ~= pExtState.win_x or m.win_y ~= pExtState.win_y then	
+		m.win_x = pExtState.win_x
+		m.win_y = pExtState.win_y
+		pExtSaveStateF = true
+	end	
+	-- if resized, set scale flag and reset gfx
+	if m.zoomF == true then
+		e.gScaleState = true
+		gfx.quit()
+		InitGFX()
+		m.zoomF = false
+	end	
+	
 	DrawGUI()
+	e.gScaleState = false	-- prevent zoom code from running every loop
 	
 	-- Save last mouse state
 	gLastMouseCap = gfx.mouse_cap
 	gLastMouseX, gLastMouseY = gfx.mouse_x, gfx.mouse_y
 	gfx.mouse_wheel = 0 -- reset gfx.mouse_wheel
 	
-	-- Check and save window position
-		__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
-
-		if m.win_x ~= pExtState.win_x or m.win_y ~= pExtState.win_y then	
-			m.win_x = pExtState.win_x
-			m.win_y = pExtState.win_y
-			pExtSaveStateF = true
-		end
-		
-	-- Set passthrough keys for play/stop
+	-- Get passthrough key for play/stop (spacebar)
 	char = gfx.getchar()
 	if char == 32 then reaper.Main_OnCommand(40044, 0) end
 	
 	-- Defer 'MainLoop' if not explicitly quiting (esc)
 	if char ~= -1 and char ~= 27 then 
 		reaper.defer(MainLoop) 
-	elseif pExtSaveStateF then
+	elseif pExtSaveStateF then -- quiting, save script state
 		pExtStateStr = pickle(pExtState)
 		reaper.SetProjExtState(0, "MEM", "pExtState", pExtStateStr )
-		pExtSaveStateF = false
+		--pExtSaveStateF = false
 	end
 	
 	-- Update Reaper GFX
 	gfx.update()
 	
-	-- midi editor and take status checks
+	-- check for midi editor and take
 	m.activeEditor = reaper.MIDIEditor_GetActive()
 	if m.activeEditor then
 		m.activeTake = reaper.MIDIEditor_GetTake(m.activeEditor)
 		if m.activeTake then
-			ShowMessage(msgText, 0) -- clear any previous messages
+			ShowMessage(msgText, 0) -- clear old messages
 			-- check for changes in the active take if the "Permute" scale is selected
 			if scaleDrop.val2[scaleDrop.val1] == "Permute" then 
 				__, pHash = reaper.MIDI_GetHash(m.activeTake, false, 0)
@@ -1785,16 +1789,16 @@ function MainLoop()
 					m.pHash = pHash
 				end -- m.pHash
 				-- don't allow any note options that might upset permute...
-				noteOptionsCb.val1[1] = 0; m.rndAllNotesF = false -- maybe allow this...?
+				noteOptionsCb.val1[1] = 0; m.rndAllNotesF  = false
 				noteOptionsCb.val1[2] = 0; m.rndFirstNoteF = false
-				noteOptionsCb.val1[3] = 0; m.rndOctX2F = false 
+				noteOptionsCb.val1[3] = 0; m.rndOctX2F     = false 
 			end -- scaleDrop   
 			-- check for grid changes
 			local grid = m.reaGrid
 			m.reaGrid, __, __ = reaper.MIDI_GetGrid(m.activeTake)
 			if grid ~= m.reaGrid then 
 				GetReaperGrid(seqGridRad)
-				seqGridRad.onLClick() -- set sane default values for sequencer based on grid
+				seqGridRad.onLClick() -- set sane defaults for sequencer
 			end -- grid
 		else -- handle m.activeTake error
 			ShowMessage(msgText, 1) 
@@ -1806,8 +1810,6 @@ function MainLoop()
 		m.activeEditor = nil
 		m.activeTake = nil
 	end -- m.activeEditor
-
-	e.gScaleState = true
 end
 --------------------------------------------------------------------------------
 -- RUN
