@@ -59,7 +59,7 @@ local p = require 'persistence' -- currently unused, i.e. no preset save, load, 
 -- GLOBAL VARIABLES START
 --------------------------------------------------------------------------------
 m = {} -- all ex machina data
--- user changable options marked with "(option)"
+-- user changeable defaults values are marked with "(option)"
 m.debug = false
 m.msgTimer = 30
 -- window
@@ -70,7 +70,7 @@ m.def_zoom = 4 -- 100% (option)
 -- zoom values are 1=70, 2=80, 3=90, 4=100, 5=110%, 6=120, 7=140, 8=160, 9=180, 10=200
 m.zoomF = false
 
--- default octave, key, and root (root = octave + key)
+-- default octave & key
 -- due to some quirk, oct 4 is really oct 3...
 m.oct = 4; m.key = 1; m.root = 0 -- (options, except m.root)
 
@@ -79,13 +79,14 @@ m.activeEditor, m.activeTake = nil, nil
 m.ppqn = 960; -- default ppqn, no idea how to check if this has been changed.. 
 m.reaGrid = 0
 
--- note randomizer flags - user set start up options
+-- note randomizer
 m.rndAllNotesF = false -- all notes or only selected notes (option)
 m.rndOctX2F = false -- enable double scale randomisation (option)
 m.rndFirstNoteF = false; -- first note is always root (option)
-m.rndPermuteF = false; m.pHash = 0 -- midi item changes
+m.rndPermuteF = false; m.pHash = 0 -- midi item state changes
+m.rndOctProb = 1 -- (option)
 
--- sequencer flags - user set start up options
+-- sequencer
 m.seqF = true -- generate sequence (option)
 m.seqFirstNoteF = true -- first note always (option)
 m.seqAccentF = true -- generate accents (option)
@@ -93,12 +94,15 @@ m.seqLegatoF = false -- use legato (option)
 m.seqRndNotesF = true -- randomise notes (option) 
 m.seqRepeatF = false -- repeat sequence by grid length (option - not implemented yet)
 m.legato = -10 -- default legatolessness value
-m.repeatStart, m.repeatEnd, m.repeatLength, m.repeatTimes = 0, 0, 0, 0 -- repeat values
+m.accentLow = 100; m.accentHigh = 127; m.accentProb = 3 -- default values (options)
+m.legatoProb = 3
+m.repeatStart, m.repeatEnd, m.repeatLength, m.repeatTimes = 0, 0, 0, 0 -- repeat values (currently unused)
 
--- euclid flags - user set start up options
+-- euclidizer
 m.eucF = true	-- generate euclid (option)
 m.eucAccentF = false	-- generate accents (option)
 m.eucRndNotesF = false	-- randomize notes (option)
+m.eucPulses = 3; m.eucSteps = 8; m.eucRot = 0 -- default values (options)
 
 -- note buffers and current buffer index
 m.notebuf = {}; m.notebuf.i = 0; m.notebuf.max = 0
@@ -136,9 +140,8 @@ m.legProbTable = {}
 
 pExtSaveStateF = false -- when true, update the pExtState for saving
 pExtLoadStateF = true -- when true, load the pExtState
-pExtState = {} -- Reaper project ext state 
+pExtState = {} -- Reaper project ext state table
 pExtStateStr = "" -- pickled string. a nom a nom a nom...
-
 --------------------------------------------------------------------------------
 -- GLOBAL VARIABLES END
 --------------------------------------------------------------------------------
@@ -147,22 +150,22 @@ pExtStateStr = "" -- pickled string. a nom a nom a nom...
 -- Utility Functions Start
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
--- Bitfields - set, clear, flip, check - return the new bitfield, or bool for check
+-- Bitfields - set, clear, flip, or check bits - returns a new bitfield, or bool (check)
 --------------------------------------------------------------------------------
-local function BitSet(val, bitIdx)
-	val = val | (1 << bitIdx); return val
+local function BitSet(bitField, bitIdx)
+	bitField = bitField | (1 << bitIdx); return bitField
 end
 --------------------------------------------------------------------------------
-local function BitClear(val, bitIdx)
-	val = val & ~(1 << bitIdx); return val
+local function BitClear(bitField, bitIdx)
+	bitField = bitField & ~(1 << bitIdx); return bitField
 end
 --------------------------------------------------------------------------------
-local function BitFlip(val, bitIdx)
-	val = val ~ (1 << bitIdx); return val
+local function BitFlip(bitField, bitIdx)
+	bitField = bitField ~ (1 << bitIdx); return bitField
 end
 --------------------------------------------------------------------------------
-local function BitCheck(val, bitIdx)
-  return (val & (1 << bitIdx) ~= 0) and true or false
+local function BitCheck(bitField, bitIdx)
+  return (bitField & (1 << bitIdx) ~= 0) and true or false
 end
 --------------------------------------------------------------------------------
 -- Wrap(n, max) -return n wrapped between 'n' and 'max'
@@ -987,7 +990,7 @@ end
 -- GUI START
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
--- MiDi Ex Machina - GUI Elements
+-- GUI Elements
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 -- Main Window
@@ -1581,9 +1584,9 @@ function setDefaultEucSliders()
 			v.val1 = pExtState.eucSliders[k]
 		end
 	else
-		euclidPulsesSldr.val1 = 3
-		euclidStepsSldr.val1 = 8
-		euclidRotationSldr.val1 = 0
+		euclidPulsesSldr.val1 = m.eucPulses
+		euclidStepsSldr.val1 = m.eucSteps
+		euclidRotationSldr.val1 = m.eucRot
 	end -- load pExtState
 end
 --------------------------------------------------------------------------------
