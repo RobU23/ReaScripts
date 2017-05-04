@@ -82,9 +82,9 @@ m.reaGrid = 0
 -- note randomizer
 m.rndAllNotesF = false -- all notes or only selected notes (option)
 m.rndOctX2F = false -- enable double scale randomisation (option)
-m.rndFirstNoteF = false; -- first note is always root (option)
+m.rndFirstNoteF = true; -- first note is always root (option)
 m.rndPermuteF = false; m.pHash = 0 -- midi item state changes
-m.rndOctProb = 1 -- (option)
+m.rndOctProb = 1 -- (option - min 0, max 10)
 
 -- sequencer
 m.seqF = true -- generate sequence (option)
@@ -95,7 +95,12 @@ m.seqRndNotesF = true -- randomise notes (option)
 m.seqRepeatF = false -- repeat sequence by grid length (option - not implemented yet)
 m.legato = -10 -- default legatolessness value
 m.accentLow = 100; m.accentHigh = 127; m.accentProb = 3 -- default values (options)
-m.legatoProb = 3
+-- accentLow/High - min 0, max 127; accentProb - min 0, max 10
+m.legatoProb = 3 -- default value (option - min 0, max 10)
+m.seqGridRadBF = 65808 -- bitfield for setting initial sequencer note length sliders
+m.seqGrid16 = {8, 8, 0, 4} -- sane default sequencer note length slider values
+m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
+m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
 m.repeatStart, m.repeatEnd, m.repeatLength, m.repeatTimes = 0, 0, 0, 0 -- repeat values (currently unused)
 
 -- euclidizer
@@ -130,7 +135,7 @@ m.scales = {
 
 -- textual list of the available scale names for the GUI list selector
 m.scalelist = {}
-m.curScaleName = "Chromatic" -- (option) !must be a valid scale name!
+m.curScaleName = "Chromatic" -- (option - !must be a valid scale name!)
 
 -- various probability tables
 m.preNoteProbTable = {};  m.noteProbTable = {}
@@ -150,18 +155,18 @@ pExtStateStr = "" -- pickled string. a nom a nom a nom...
 -- Utility Functions Start
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
--- Bitfields - set, clear, flip, or check bits - returns a new bitfield, or bool (check)
+-- Bitfields - set, clear, flip, or check bits - returns a bitfield, or bool (check)
 --------------------------------------------------------------------------------
 local function BitSet(bitField, bitIdx)
-	bitField = bitField | (1 << bitIdx); return bitField
+	return bitField | (1 << bitIdx)
 end
 --------------------------------------------------------------------------------
 local function BitClear(bitField, bitIdx)
-	bitField = bitField & ~(1 << bitIdx); return bitField
+	return bitField & ~(1 << bitIdx)
 end
 --------------------------------------------------------------------------------
 local function BitFlip(bitField, bitIdx)
-	bitField = bitField ~ (1 << bitIdx); return bitField
+	return bitField ~ (1 << bitIdx)
 end
 --------------------------------------------------------------------------------
 local function BitCheck(bitField, bitIdx)
@@ -1044,7 +1049,7 @@ local t_noteSliders = {noteSldr01, noteSldr02, noteSldr03, noteSldr04, noteSldr0
 -- Note weight slider label (Textbox)
 local probSldrText = e.Textbox:new({1}, nx, 210, 510, 20, e.col_grey5, "Note Weight Sliders", e.Arial, 16, e.col_grey7)
 -- Note octave doubler probability slider
-local octProbSldr = e.Vert_Slider:new({1}, nx+(np*13) + 10,  ny, nw, nh, e.col_blue, "%", e.Arial, 16, e.col_grey8, 1, 0, 0, 10, 1)
+local octProbSldr = e.Vert_Slider:new({1}, nx+(np*13) + 10,  ny, nw, nh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.rndOctProb, 0, 0, 10, 1)
 local octProbText = e.Textbox:new({1}, nx+(np*13) + 10, 210, (nw), 20, e.col_grey5, "Oct", e.Arial, 16, e.col_grey7) 
 -- Note randomiser options
 local noteOptionsCb = e.Checkbox:new({1}, nx+(np*14)+10, ny+30, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0},   {"All / Sel Notes", "1st Note = Root", "Octave X2"})
@@ -1073,12 +1078,12 @@ local t_seqSliders = {seqSldr16, seqSldr8, seqSldr4, seqSldrRest}
 local seqSldrText = e.Textbox:new({2}, sx + (sp * 3) - 10, 210, (sw * 4) + 50, 20, e.col_grey5, "Sequence Weight Sliders", e.Arial, 16, e.col_grey7)
 
 -- velocity accent slider (shared with Euclid layer)
-local seqAccRSldr  = e.V_Rng_Slider:new({2,3}, sx + (sp * 10), sy, sw, sh, e.col_blue, "", e.Arial, 16, e.col_grey8, 100, 127, 0, 127, 1)
-local seqAccProbSldr = e.Vert_Slider:new({2,3}, sx + (sp * 11),  sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, 3, 0, 0, 10, 1)
+local seqAccRSldr  = e.V_Rng_Slider:new({2,3}, sx + (sp * 10), sy, sw, sh, e.col_blue, "", e.Arial, 16, e.col_grey8, m.accentLow, m.accentHigh, 0, 127, 1)
+local seqAccProbSldr = e.Vert_Slider:new({2,3}, sx + (sp * 11),  sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.accentProb, 0, 0, 10, 1)
 local seqAccSldrText = e.Textbox:new({2,3}, sx + (sp * 10), 210, (sw * 2) + 10, 20, e.col_grey5, "Vel  |  Acc", e.Arial, 16, e.col_grey7)
 
 -- legato slider
-local seqLegProbSldr = e.Vert_Slider:new({2}, sx + (sp * 12), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, 3, 0, 0, 10, 1)
+local seqLegProbSldr = e.Vert_Slider:new({2}, sx + (sp * 12), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.legatoProb, 0, 0, 10, 1)
 local seqLegSldrText = e.Textbox:new({2}, sx+(sp * 12), 210, sw, 20, e.col_grey5, "Leg", e.Arial, 16, e.col_grey7)
 -- Sequencer options
 local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 14) + 10, sy + 5, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0,0,0,0}, {"Generate", "1st Note Always", "Accent", "Legato", "Rnd Notes", "Repeat"})
@@ -1092,9 +1097,9 @@ local euclidBtn = e.Button:new({3}, 25, 205, 110, 25, e.col_orange, "Generate", 
 -- euclidean sliders
 local ex, ey, ew, eh, ep = 160, 50, 30, 150, 40
 --local vslider01 = e.Vert_Slider:new({1}, x, y, w, h, col, "label", Font, 16, e.col_grey8, v1,v2, min, max, step)
-local euclidPulsesSldr = e.Vert_Slider:new({3}, ex+(ep*3), ey, ew, eh, e.col_blue, "Puls", Arial, 16, e.col_grey8, 3, 0, 1, 24, 1)
-local euclidStepsSldr = e.Vert_Slider:new({3}, ex+(ep*4), ey, ew, eh, e.col_blue, "Step", Arial, 16, e.col_grey8, 8, 0, 1, 24, 1)
-local euclidRotationSldr = e.Vert_Slider:new({3}, ex+(ep*5), ey, ew, eh, e.col_blue, "Rot",  Arial, 16, e.col_grey8, 0, 0, 0, 24, 1)
+local euclidPulsesSldr = e.Vert_Slider:new({3}, ex+(ep*3), ey, ew, eh, e.col_blue, "Puls", Arial, 16, e.col_grey8, m.eucPulses, 0, 1, 24, 1)
+local euclidStepsSldr = e.Vert_Slider:new({3}, ex+(ep*4), ey, ew, eh, e.col_blue, "Step", Arial, 16, e.col_grey8, m.eucSteps, 0, 1, 24, 1)
+local euclidRotationSldr = e.Vert_Slider:new({3}, ex+(ep*5), ey, ew, eh, e.col_blue, "Rot",  Arial, 16, e.col_grey8, m.eucRot, 0, 0, 24, 1)
 local t_euclidSliders = {euclidPulsesSldr, euclidStepsSldr, euclidRotationSldr}
 -- euclid slider label 
 local txtEuclidLabel = e.Textbox:new({3}, ex + (ep * 3), 210, (ew * 3) + 20, 20, e.col_grey5, "Euclid Sliders", Arial, 16, e.col_grey7)
@@ -1226,12 +1231,13 @@ randomBtn.onLClick = function()
 		GenOctaveTable(m.octProbTable, octProbSldr)
 		GetNotesFromTake() 
 		RandomizeNotesPoly(m.noteProbTable)
-			-- set project ext state	
-	pExtState.noteSliders = {}
-	for k, v in pairs(t_noteSliders) do
-		pExtState.noteSliders[k] = v.val1
-	end
-	pExtSaveStateF = true
+		-- set project ext state	
+		pExtState.noteSliders = {}
+		for k, v in pairs(t_noteSliders) do
+			pExtState.noteSliders[k] = v.val1
+		end
+		pExtState.rndOctProb = octProbSldr.val1
+		pExtSaveStateF = true
 	end --m.activeTake
 end 
 -- Sequence
@@ -1261,6 +1267,13 @@ sequenceBtn.onLClick = function()
 				randomBtn.onLClick() -- call RandomizeNotes
 			end
 		end  -- m.seqF
+		-- set project ext state	
+		pExtState.seqAccRSldrLo = seqAccRSldr.val1
+		pExtState.seqAccRSldrHi = seqAccRSldr.val2
+		pExtState.seqAccProb = seqAccProbSldr.val1
+		pExtState.seqLegProb = seqLegProbSldr.val1
+		
+		pExtSaveStateF = true
 	end  --m.activeTake
 end
 -- Euclid
@@ -1407,14 +1420,20 @@ seqGridRad.onLClick = function() -- change grid size
 	if debug or m.debug then ConMsg("\nseqGridRad.onLClick()") end
 	if m.activeTake then
 		if seqGridRad.val1 == 1 then -- 1/16 grid
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40192) -- set grid 1/16 
-			seqSldr16.val1 = 8; seqSldr8.val1 = 8; seqSldr4.val1 = 0; seqSldrRest.val1 = 4        
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40192) -- set grid 1/16
+			if BitCheck(m.seqGridRadBF, 16) then
+				seqSldr16.val1 = 8; seqSldr8.val1 = 8; seqSldr4.val1 = 0; seqSldrRest.val1 = 4
+			end
 		elseif seqGridRad.val1 == 2 then -- 1/8 grid
-			seqSldr16.val1 = 0; seqSldr8.val1 = 8; seqSldr4.val1 = 2; seqSldrRest.val1 = 2      
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40197) -- set grid 1/8  
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40197) -- set grid 1/8
+			if BitCheck(m.seqGridRadBF, 8) then
+				seqSldr16.val1 = 0; seqSldr8.val1 = 8; seqSldr4.val1 = 2; seqSldrRest.val1 = 2
+			end
 		elseif seqGridRad.val1 == 3 then -- 1/4 grid
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40201) -- set grid 1/4 
-			seqSldr16.val1 = 0; seqSldr8.val1 = 2; seqSldr4.val1 = 8; seqSldrRest.val1 = 1        
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40201) -- set grid 1/4
+			if BitCheck(m.seqGridRadBF, 4) then
+				seqSldr16.val1 = 0; seqSldr8.val1 = 2; seqSldr4.val1 = 8; seqSldrRest.val1 = 1
+			end
 		end -- seGridRad
 	end -- m.activeTake
 end
@@ -1567,12 +1586,38 @@ function setDefaultRndSliders()
 		for k, v in pairs(t_noteSliders) do
 			v.val1 = 1
 		end
-	end -- load pExtState
+	end -- load note sliders pExtState
+	if pExtState.rndOctProb then -- octave probability slider
+		octProbSldr.val1 = pExtState.rndOctProb
+	else
+		octProbSldr.val1 = m.rndOctProb
+	end
 end
 --------------------------------------------------------------------------------
 function setDefaultSeqSliders()
 	local debug = false
 	if debug or m.debug then ConMsg("setDefaultSeqSliders()") end
+	-- if seq accent & legato sliders were saved to project state, load them
+	if pExtState.seqAccRSldrLo then 
+		seqAccRSldr.val1 = pExtState.seqAccRSldrLo
+	else
+		seqAccRSldr.val1 = m.accentLow
+	end
+	if pExtState.seqAccRSldrHi then 
+		seqAccRSldr.val2 = pExtState.seqAccRSldrHi
+	else
+		seqAccRSldr.val2 = m.accentHigh
+	end
+	if pExtState.seqAccProb then 
+		seqAccProbSldr.val1 = pExtState.seqAccProb
+	else
+		seqAccProbSldr.val1	= m.accentProb
+	end
+	if pExtState.seqLegProb then 
+		seqLegProbSldr.val1 = pExtState.seqLegProb
+	else
+		seqLegProbSldr.val1 = m.legatoProb
+	end
 end
 --------------------------------------------------------------------------------
 function setDefaultEucSliders()
@@ -1588,6 +1633,25 @@ function setDefaultEucSliders()
 		euclidStepsSldr.val1 = m.eucSteps
 		euclidRotationSldr.val1 = m.eucRot
 	end -- load pExtState
+end
+--------------------------------------------------------------------------------
+function setSeqGridSliders()
+--[[
+	m.seqGridRadBF = 65808 -- bitfield for setting initial sequencer note length sliders
+	m.seqGrid16 = {8, 8, 0, 4} -- sane default sequencer note length slider values
+	m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
+	m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
+	if seqGridRad.val1 == 1 then -- 1/16 grid
+		reaper.MIDIEditor_OnCommand(m.activeEditor, 40192) -- set grid 1/16 
+		seqSldr16.val1 = 8; seqSldr8.val1 = 8; seqSldr4.val1 = 0; seqSldrRest.val1 = 4        
+	elseif seqGridRad.val1 == 2 then -- 1/8 grid
+		seqSldr16.val1 = 0; seqSldr8.val1 = 8; seqSldr4.val1 = 2; seqSldrRest.val1 = 2      
+		reaper.MIDIEditor_OnCommand(m.activeEditor, 40197) -- set grid 1/8  
+	elseif seqGridRad.val1 == 3 then -- 1/4 grid
+		reaper.MIDIEditor_OnCommand(m.activeEditor, 40201) -- set grid 1/4 
+		seqSldr16.val1 = 0; seqSldr8.val1 = 2; seqSldr4.val1 = 8; seqSldrRest.val1 = 1        
+	end -- seGridRad
+--]]
 end
 --------------------------------------------------------------------------------
 -- Draw GUI
@@ -1647,11 +1711,9 @@ function InitMidiExMachina()
 	-- set GUI defaults or restore from project state
 	setDefaultWindowOpts()
 	setDefaultScaleOpts()
-	setDefaultRndOptions()
-	setDefaultRndSliders()
-	setDefaultSeqOptions()
-	setDefaultEucOptions()
-	setDefaultEucSliders()
+	setDefaultRndOptions(); setDefaultRndSliders()
+	setDefaultSeqOptions(); setDefaultSeqSliders()
+	setDefaultEucOptions(); setDefaultEucSliders()
 
 	SetSeqGridSizes(t_seqSliders)
 	--set sane default sequencer grid slider values
