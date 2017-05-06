@@ -1173,6 +1173,9 @@ layerBtn01.onLClick = function() -- randomizer
 	layerBtn04.font_rgba = e.col_grey7
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey5)
 	e.gScaleState = true
+	-- set project ext state
+	pExtState.activeLayer = e.gActiveLayer
+	pExtSaveStateF = true			
 end
 -- Layer 2 button
 layerBtn02.onLClick = function() -- sequencer
@@ -1190,6 +1193,9 @@ layerBtn02.onLClick = function() -- sequencer
 	layerBtn04.font_rgba = e.col_grey7
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a  = table.unpack(e.col_grey5)
 	e.gScaleState = true
+		-- set project ext state
+	pExtState.activeLayer = e.gActiveLayer
+	pExtSaveStateF = true		
 end
 -- Layer 3 button
 layerBtn03.onLClick = function() -- euclidean
@@ -1207,6 +1213,9 @@ layerBtn03.onLClick = function() -- euclidean
 	layerBtn04.font_rgba = e.col_grey7
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey5)
 	e.gScaleState = true
+		-- set project ext state
+	pExtState.activeLayer = e.gActiveLayer
+	pExtSaveStateF = true		
 end
 -- Layer 4 button
 layerBtn04.onLClick = function() -- options
@@ -1224,6 +1233,9 @@ layerBtn04.onLClick = function() -- options
 	layerBtn04.font_rgba = e.col_grey8 -- highlight layer 4
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey6)
 	e.gScaleState = true
+		-- set project ext state
+	pExtState.activeLayer = e.gActiveLayer
+	pExtSaveStateF = true		
 end
 -- Undo button
 undoBtn.onLClick = function() -- undo
@@ -1259,6 +1271,16 @@ function SetDefaultWindowOpts()
 		m.win_y = pExtState.win_y
 	end
 	zoomDrop.onLClick()
+end
+-- Set default layer
+function SetDefaultLayer()
+	if pExtState.activeLayer then 
+		    if pExtState.activeLayer == 1 then layerBtn01.onLClick()
+		elseif pExtState.activeLayer == 2 then layerBtn02.onLClick()
+		elseif pExtState.activeLayer == 3 then layerBtn03.onLClick()
+		elseif pExtState.activeLayer == 4 then layerBtn04.onLClick()
+		end
+	end
 end
 
 --------------------------------------------------------------------------------
@@ -1872,7 +1894,7 @@ function InitMidiExMachina()
 		end -- pExtLoadStateF
 		
 	-- set GUI defaults or restore from project state
-	SetDefaultWindowOpts()
+	SetDefaultWindowOpts();	SetDefaultLayer() 
 	SetDefaultScaleOpts()
 	SetDefaultRndOptions(); SetDefaultRndSliders()
 	SetDefaultSeqOptions(); SetDefaultSeqGridSliders(); SetDefaultAccLegSliders()
