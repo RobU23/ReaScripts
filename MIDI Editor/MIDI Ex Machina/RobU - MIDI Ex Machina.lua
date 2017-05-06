@@ -97,7 +97,6 @@ m.legato = -10 -- default legatolessness value
 m.accentLow = 100; m.accentHigh = 127; m.accentProb = 3 -- default values (options)
 -- accentLow/High - min 0, max 127; accentProb - min 0, max 10
 m.legatoProb = 3 -- default value (option - min 0, max 10)
-m.seqGridRadBF = 65808 -- bitfield for setting initial sequencer note length sliders
 m.seqGrid16 = {8, 8, 0, 4} -- sane default sequencer note length slider values
 m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
 m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
@@ -1130,9 +1129,35 @@ local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqAcc
 -- GUI Functions START
 -------------------------------------------------------------------------------- 
 --------------------------------------------------------------------------------
--- Buttons
+-- Main window
 --------------------------------------------------------------------------------
--- Layer 1
+-- Window zoom droplist
+zoomDrop.onLClick = function() -- window scaling
+	local debug = false
+	if debug or m.debug then ConMsg("\nzoomDrop.onLClick()") end
+	    if zoomDrop.val1 ==  1 then e.gScale = 0.7
+	elseif zoomDrop.val1 ==  2 then e.gScale = 0.8
+	elseif zoomDrop.val1 ==  3 then e.gScale = 0.9
+	elseif zoomDrop.val1 ==  4 then e.gScale = 1  
+	elseif zoomDrop.val1 ==  5 then e.gScale = 1.1
+	elseif zoomDrop.val1 ==  6 then e.gScale = 1.2
+	elseif zoomDrop.val1 ==  7 then e.gScale = 1.4
+	elseif zoomDrop.val1 ==  8 then e.gScale = 1.6
+	elseif zoomDrop.val1 ==  9 then e.gScale = 1.8
+	elseif zoomDrop.val1 == 10 then e.gScale = 2.0
+	end
+	if debug or m.debug then ConMsg("zoom = " .. tostring(e.gScale)) end
+	-- Save state, close and reopen GFX window
+	if not pExtState.win_x then
+		__, m.win_x, m.win_y, __, __ = gfx.dock(-1,0,0,0,0)
+	else
+		-- set project ext state
+		pExtState.zoomDrop = zoomDrop.val1
+		pExtSaveStateF = true		
+	end
+	m.zoomF = true
+end
+-- Layer 1 button
 layerBtn01.onLClick = function() -- randomizer
 	local debug = false
 	if debug or m.debug then ConMsg("\nlayerBtn01.onLClick() (note randomizer)") end
@@ -1149,7 +1174,7 @@ layerBtn01.onLClick = function() -- randomizer
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey5)
 	e.gScaleState = true
 end
--- Layer 2
+-- Layer 2 button
 layerBtn02.onLClick = function() -- sequencer
 	local debug = false
 	if debug or m.debug then ConMsg("\nlayerBtn02.onLClick() (sequencer)") end
@@ -1166,7 +1191,7 @@ layerBtn02.onLClick = function() -- sequencer
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a  = table.unpack(e.col_grey5)
 	e.gScaleState = true
 end
--- Layer 3
+-- Layer 3 button
 layerBtn03.onLClick = function() -- euclidean
 	local debug = false
 	if debug or m.debug then ConMsg("\nlayerBtn03.onLClick() (euclid)") end
@@ -1183,7 +1208,7 @@ layerBtn03.onLClick = function() -- euclidean
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey5)
 	e.gScaleState = true
 end
--- Layer 4
+-- Layer 4 button
 layerBtn04.onLClick = function() -- options
 	local debug = false
 	if debug or m.debug then ConMsg("\nlayerBtn04.onLClick() (options)") end
@@ -1200,7 +1225,7 @@ layerBtn04.onLClick = function() -- options
 	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey6)
 	e.gScaleState = true
 end
--- Undo
+-- Undo button
 undoBtn.onLClick = function() -- undo
 	local debug = false
 	if debug or m.debug then ConMsg("\nundoBtn.onLClick()") end
@@ -1208,7 +1233,7 @@ undoBtn.onLClick = function() -- undo
 	InsertNotes()
 	PrintNotes(m.notebuf[m.notebuf.i])
 end
--- Redo
+-- Redo button
 redoBtn.onLClick = function() -- redo
 	local debug = false
 	if debug or m.debug then ConMsg("\nredoBtn.onLClick()") end
@@ -1222,7 +1247,24 @@ redoBtn.onLClick = function() -- redo
 	if debug or m.debug then ConMsg("\nnothing to redo...") end  
 	end
 end
--- Randomize
+-- Set default window options
+function SetDefaultWindowOpts()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultWinOpts()") end
+	if pExtState.zoomDrop then
+		zoomDrop.val1 = pExtState.zoomDrop
+	end
+	if pExtState.win_x or pExtState.win_y then
+		m.win_x = pExtState.win_x
+		m.win_y = pExtState.win_y
+	end
+	zoomDrop.onLClick()
+end
+
+--------------------------------------------------------------------------------
+-- Note Randomizer
+--------------------------------------------------------------------------------
+-- Randomizer button
 randomBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nrandomBtn.onLClick()") end
@@ -1240,13 +1282,155 @@ randomBtn.onLClick = function()
 		pExtSaveStateF = true
 	end --m.activeTake
 end 
--- Sequence
+-- Randomizer options toggle logic
+noteOptionsCb.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\nnoteOptionsCb.onLClick()") end
+	m.rndAllNotesF =  noteOptionsCb.val1[1] == 1 and true or false -- All / Sel Notes
+	m.rndFirstNoteF = noteOptionsCb.val1[2] == 1 and true or false -- 1st Note Root
+	m.rndOctX2F =     noteOptionsCb.val1[3] == 1 and true or false -- Octave X2
+	pExtState.noteOptionsCb = {m.rndAllNotesF, m.rndFirstNoteF, m.rndOctX2F}
+	pExtSaveStateF = true
+	if debug or m.debug then PrintTable(noteOptionsCb.val1) end
+end
+-- Root Key droplist
+keyDrop.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\nkeyDrop.onLClick()") end
+	m.key = keyDrop.val1
+	m.root = SetRootNote(m.oct, m.key)	
+	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
+	-- set project ext state
+	pExtState.key = m.key
+	pExtState.root = m.root
+	pExtSaveStateF = true
+end
+-- Octave droplist
+octDrop.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\noctDrop.onLClick()") end
+	m.oct = octDrop.val1
+	m.root = SetRootNote(m.oct, m.key)
+	-- set project ext state	
+	pExtState.oct = m.oct
+	pExtState.root = m.root
+	pExtSaveStateF = true
+end
+-- Scale droplist
+scaleDrop.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\nscaleDrop.onLClick()") end
+	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
+	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
+	-- set project ext state	
+	pExtState.curScaleName = scaleDrop.val2[scaleDrop.val1]
+	pExtSaveStateF = true
+end	
+-- Set default scale options
+function SetDefaultScaleOpts()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultScaleOpts()") end
+	-- if key saved in project state, load it
+	if pExtState.key then 
+		m.key = math.floor(tonumber(pExtState.key))
+		keyDrop.val1 = m.key
+	end
+	-- if octave saved in project state, load it
+	if pExtState.oct then 
+		m.oct = math.floor(tonumber(pExtState.oct))
+		octDrop.val1 = m.oct
+	end
+	-- set the midi note number for scale root
+	m.root = SetRootNote(m.oct, m.key) 
+	-- create a scale name lookup table for the gui (scaleDrop)
+	for k, v in pairs(m.scales) do
+		m.scalelist[k] = m.scales[k]["name"]
+	end
+	-- if scale name saved in project state, load it
+	if pExtState.curScaleName then
+		m.curScaleName = pExtState.curScaleName
+	end
+	-- update the scale dropbox val1 to match the scale table index
+	for k, v in pairs(m.scales) do 
+		if v.name == m.curScaleName then scaleDrop.val1 = k	end
+	end	
+
+	SetScale(m.curScaleName, m.scales, m.preNoteProbTable)	--set chosen scale
+	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable) -- set sliders labels to current scale notes
+end
+-- Set default randomizer options
+function SetDefaultRndOptions()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultRndOptions()") end
+	-- if randomizer options were saved to project state, load them
+	if pExtState.noteOptionsCb then
+		m.rndAllNotesF =  pExtState.noteOptionsCb[1] == true and true or false 
+		m.rndFirstNoteF = pExtState.noteOptionsCb[2] == true and true or false
+		m.rndOctX2F =     pExtState.noteOptionsCb[3] == true and true or false
+		end
+	-- set randomizer options using defaults, or loaded project state
+	noteOptionsCb.val1[1] = (true and m.rndAllNotesF) and 1 or 0 -- all notes
+	noteOptionsCb.val1[2] = (true and m.rndFirstNoteF) and 1 or 0 -- first note root
+	noteOptionsCb.val1[3] = (true and m.rndOctX2F) and 1 or 0 -- octave doubler
+end
+-- Set default randomizer sliders
+function SetDefaultRndSliders()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultRndSliders()") end
+	-- if randomizer sliders were saved to project state, load them
+	if pExtState.noteSliders then
+		for k, v in pairs(t_noteSliders) do
+			v.val1 = pExtState.noteSliders[k]
+		end
+	else
+		for k, v in pairs(t_noteSliders) do
+			v.val1 = 1
+		end
+	end -- load note sliders pExtState
+	if pExtState.rndOctProb then -- octave probability slider
+		octProbSldr.val1 = pExtState.rndOctProb
+	else
+		octProbSldr.val1 = m.rndOctProb
+	end
+end
+-- Reset note probability sliders
+probSldrText.onRClick = function()
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Note Sliders")
+	if result == 1 then 
+		for k, v in pairs(t_noteSliders) do -- reset the sliders
+			if v.label ~= "" then v.val1 = 1 end
+		end -- in pairs(t_noteSliders)
+		if pExtState.noteSliders then -- write the new proj ext state
+			for k, v in pairs(t_noteSliders) do
+				if v.label ~= "" then pExtState.noteSliders[k] = v.val1 end
+			end -- in pairs(t_noteSliders)
+		end -- pExtState.noteSliders
+		pExtSaveStateF = true	-- set the ext state save flag
+	end -- result
+end
+-- Reset octave probability slider
+octProbText.onRClick = function()
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Octave Slider")
+	if result == 1 then 
+		octProbSldr.val1 = m.rndOctProb
+		if pExtState.rndOctProb then -- write the new proj ext state
+				pExtState.rndOctProb = nil
+		end -- pExtState.noteSliders
+	pExtSaveStateF = true	-- set the ext state save flag
+	end -- result
+end
+
+--------------------------------------------------------------------------------
+-- Sequencer
+--------------------------------------------------------------------------------
+-- Sequencer button
 sequenceBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nsequenceBtn.onLClick()") end
 	if m.activeTake then 
 		if m.seqF then
-			if debug or m.debug then ConMsg("m.seqF = " .. tostring(m.seqF)) end
 			SetSeqGridSizes(t_seqSliders)
 			GenProbTable(m.preSeqProbTable, t_seqSliders, m.seqProbTable)
 			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
@@ -1257,17 +1441,34 @@ sequenceBtn.onLClick = function()
 				randomBtn.onLClick() -- call RandomizeNotes
 			end
 		else -- not m.seqF
-			if debug or m.debug then ConMsg("m.seqF = " .. tostring(m.seqF)) end
 			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
 			GenLegatoTable(m.legProbTable, seqLegProbSldr)
 			GetNotesFromTake() 
 			GenNoteAttributes(m.seqAccentF, m.accProbTable, seqAccRSldr, m.seqLegatoF, m.legProbTable)  
 			if m.seqRndNotesF then
-			if debug or m.debug then ConMsg("m.seqRndNotesF = " .. tostring(m.seqRndNotesF)) end
 				randomBtn.onLClick() -- call RandomizeNotes
 			end
 		end  -- m.seqF
-		-- set project ext state	
+		-- set project ext state
+		if seqGridRad.val1 == 1 then -- 1/16 grid
+			pExtState.seqGrid16 = {}
+			for k, v in pairs (t_seqSliders) do
+				pExtState.seqGrid16[k] = v.val1
+			end
+		end
+		if seqGridRad.val1 == 2 then -- 1/8 grid
+			pExtState.seqGrid8 = {}
+			for k, v in pairs (t_seqSliders) do
+				pExtState.seqGrid8[k] = v.val1
+			end
+		end		
+		if seqGridRad.val1 == 3 then -- 1/4 grid
+			pExtState.seqGrid4 = {}
+			for k, v in pairs (t_seqSliders) do
+				pExtState.seqGrid4[k] = v.val1
+			end
+		end	
+		
 		pExtState.seqAccRSldrLo = seqAccRSldr.val1
 		pExtState.seqAccRSldrHi = seqAccRSldr.val2
 		pExtState.seqAccProb = seqAccProbSldr.val1
@@ -1276,7 +1477,225 @@ sequenceBtn.onLClick = function()
 		pExtSaveStateF = true
 	end  --m.activeTake
 end
--- Euclid
+-- Sequencer options toggle logic 
+seqOptionsCb.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\nseqOptionsCb.onLClick()") end
+	m.seqF = 					seqOptionsCb.val1[1] == 1 and true or false -- Generate
+	m.seqFirstNoteF = seqOptionsCb.val1[2] == 1 and true or false -- 1st Note Always
+	m.seqAccentF = 		seqOptionsCb.val1[3] == 1 and true or false -- Accent
+	m.seqLegatoF = 		seqOptionsCb.val1[4] == 1 and true or false -- Legato
+	m.seqRndNotesF = 	seqOptionsCb.val1[5] == 1 and true or false -- Randomize Notes
+	m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Repeat
+	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
+	pExtSaveStateF = true
+	if debug or m.debug then PrintTable(seqOptionsCb.val1) end
+end
+-- Sequencer grid radio button
+seqGridRad.onLClick = function() -- change grid size
+	local debug = false
+	if debug or m.debug then ConMsg("\nseqGridRad.onLClick()") end
+	if m.activeTake then
+	
+		if seqGridRad.val1 == 1 then -- 1/16 grid
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40192) -- set grid
+			if pExtState.seqGrid16 then
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = pExtState.seqGrid16[k]
+				end -- in pairs(t_seqSliders)
+			else -- not pExtState.seqGrid16
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = m.seqGrid16[k]
+				end -- in pairs(t_seqSliders)
+			end -- if pExtState.seqGrid16
+
+		elseif seqGridRad.val1 == 2 then -- 1/8 grid
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40197) -- set grid
+			if pExtState.seqGrid8 then
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = pExtState.seqGrid8[k]
+				end -- in pairs(t_seqSliders)
+			else -- not pExtState.seqGrid8
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = m.seqGrid8[k]
+				end -- in pairs(t_seqSliders)
+			end -- if pExtState.seqGrid8
+
+		elseif seqGridRad.val1 == 3 then -- 1/4 grid
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40201) -- set grid
+			if pExtState.seqGrid4 then -- 1/4 grid
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = pExtState.seqGrid4[k]
+				end -- in pairs(t_seqSliders)
+			else -- not pExtState.seqGrid4
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = m.seqGrid4[k]
+				end -- in pairs(t_seqSliders)
+			end -- pExtState.seqGrid4
+		end -- seGridRad
+
+	end -- m.activeTake
+end
+-- Set sequencer default options
+function SetDefaultSeqOptions()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultSeqOptions()") end
+	
+	-- if sequencer options were saved to project state, load them
+	if pExtState.seqOptionsCb then 
+		m.seqF = 					pExtState.seqOptionsCb[1] ==  true and true or false
+		m.seqFirstNoteF = pExtState.seqOptionsCb[2] ==  true and true or false
+		m.seqAccentF = 		pExtState.seqOptionsCb[3] ==  true and true or false
+		m.seqLegatoF = 		pExtState.seqOptionsCb[4] ==  true and true or false
+		m.seqRndNotesF = 	pExtState.seqOptionsCb[5] ==  true and true or false
+		m.seqRepeatF = 		pExtState.seqOptionsCb[6] ==  true and true or false
+	end
+	
+	-- set sequencer options using defaults, or loaded project state
+	seqOptionsCb.val1[1] = (true and m.seqF) and 1 or 0 -- generate
+	seqOptionsCb.val1[2] = (true and m.seqFirstNoteF) and 1 or 0 -- 1st Note Always
+	seqOptionsCb.val1[3] = (true and m.seqAccentF) and 1 or 0 -- accent
+	seqOptionsCb.val1[4] = (true and m.seqLegatoF) and 1 or 0 -- legato
+	seqOptionsCb.val1[5] = (true and m.seqRndNotesF) and 1 or 0 -- random notes
+	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0 -- repeat
+end
+-- Set default accent & legato sliders
+function SetDefaultAccLegSliders()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultAccLegSliders()") end
+	-- if seq accent & legato sliders were saved to project state, load them
+	if pExtState.seqAccRSldrLo then 
+		seqAccRSldr.val1 = pExtState.seqAccRSldrLo
+	else
+		seqAccRSldr.val1 = m.accentLow
+	end
+	if pExtState.seqAccRSldrHi then 
+		seqAccRSldr.val2 = pExtState.seqAccRSldrHi
+	else
+		seqAccRSldr.val2 = m.accentHigh
+	end
+	if pExtState.seqAccProb then 
+		seqAccProbSldr.val1 = pExtState.seqAccProb
+	else
+		seqAccProbSldr.val1	= m.accentProb
+	end
+	if pExtState.seqLegProb then 
+		seqLegProbSldr.val1 = pExtState.seqLegProb
+	else
+		seqLegProbSldr.val1 = m.legatoProb
+	end
+end
+-- Set default grid sliders
+function SetDefaultSeqGridSliders()
+	local debug = false
+	if debug or m.debug then ConMsg("\nSetDefaultSeqGridSliders()") end
+
+	GetReaperGrid(seqGridRad)
+	SetSeqGridSizes(t_seqSliders)	
+
+	if seqGridRad.val1 == 1 then
+		if pExtState.seqGrid16 then -- 1/16 grid
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = pExtState.seqGrid16[k]
+			end
+		else -- not pExtState.seqGrid16
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = m.seqGrid16[k]
+			end
+		end -- pExtState.seqGrid16
+
+	elseif seqGridRad.val1 == 2 then	
+		if pExtState.seqGrid8 then -- 1/8 grid
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = pExtState.seqGrid8[k]
+			end
+		else -- not pExtState.seqGrid8
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = m.seqGrid8[k]
+			end
+		end -- pExtState.seqGrid8
+
+	elseif seqGridRad.val1 == 3 then		
+		if pExtState.seqGrid4 then -- 1/4 grid
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = pExtState.seqGrid4[k]
+			end
+		else -- not pExtState.seqGrid4
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = m.seqGrid4[k]
+			end
+		end 
+	end -- pExtState.seqGrid4
+	
+		if debug or m.debug then 
+			for k, v in pairs(t_seqSliders) do
+				ConMsg("t_seqSliders.val1 (4) = " .. tostring(v.val1))
+			end
+		end
+		
+end
+-- Reset sequencer grid sliders
+seqSldrText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\nseqSldrText.onLClick()") end
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Sequence Sliders")
+	if result == 1 then
+		if seqGridRad.val1 == 1 then -- 1/16ths
+			for k, v in pairs(t_seqSliders) do -- reset the sliders
+				v.val1 = m.seqGrid16[k]
+			end -- in pairs(t_seqSliders)
+			pExtState.seqGrid16 = nil
+			
+		elseif seqGridRad.val1 == 2 then -- 1/8ths
+			for k, v in pairs(t_seqSliders) do -- reset the sliders
+				v.val1 = m.seqGrid8[k]
+			end -- in pairs(t_seqSliders)
+			pExtState.seqGrid8 = nil
+			
+		elseif seqGridRad.val1 == 3 then -- 1/4ths
+			for k, v in pairs(t_seqSliders) do -- reset the sliders
+				v.val1 = m.seqGrid4[k]
+			end -- in pairs(t_seqSliders)
+			pExtState.seqGrid4 = nil
+			
+		end -- seqGridRad
+		pExtSaveStateF = true	-- set the ext state save flag
+	end -- result
+end
+-- Reset sequencer velocity slider
+seqAccSldrText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\nseqAccSldrText.onLClick()") end
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Accent Sliders")
+	if result == 1 then 
+		seqAccRSldr.val1 = m.accentLow
+		if pExtState.seqAccRSldrLo then pExtState.seqAccRSldrLo = nil end		
+		seqAccRSldr.val2 = m.accentHigh
+		if pExtState.seqAccRSldrHi then pExtState.seqAccRSldrHi = nil end
+		seqAccProbSldr.val1 = m.accentProb
+		if pExtState.seqAccProb then pExtState.seqAccProb = nil end
+	pExtSaveStateF = true	-- set the ext state save flag
+	end -- result
+end
+-- Reset sequencer legato slider
+seqLegSldrText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\nseqLegSldrText.onLClick()") end
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Legato Slider")
+	if result == 1 then 
+		seqLegProbSldr.val1 = m.legatoProb
+		if pExtState.seqLegProb then pExtState.seqLegProb = nil end
+		pExtSaveStateF = true
+	end -- result
+end
+
+--------------------------------------------------------------------------------
+-- Euclidizer
+--------------------------------------------------------------------------------
+-- Euclidizer button
 euclidBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\neuclidBtn.onLClick()") end
@@ -1307,37 +1726,7 @@ euclidBtn.onLClick = function()
 		pExtSaveStateF = true
 	end -- m.activeTake
 end
---------------------------------------------------------------------------------
--- Checkboxes and Toggles
---------------------------------------------------------------------------------
--- Note randomizer options toggle logic
-noteOptionsCb.onLClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("\nnoteOptionsCb.onLClick()") end
-	m.rndAllNotesF =  noteOptionsCb.val1[1] == 1 and true or false -- All / Sel Notes
-	m.rndFirstNoteF = noteOptionsCb.val1[2] == 1 and true or false -- 1st Note Root
-	m.rndOctX2F =     noteOptionsCb.val1[3] == 1 and true or false -- Octave X2
-	pExtState.noteOptionsCb = {m.rndAllNotesF, m.rndFirstNoteF, m.rndOctX2F}
-	pExtSaveStateF = true
-	if debug or m.debug then PrintTable(noteOptionsCb.val1) end
-end
-
--- Sequencer options toggle logic 
-seqOptionsCb.onLClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("\nseqOptionsCb.onLClick()") end
-	m.seqF = 					seqOptionsCb.val1[1] == 1 and true or false -- Generate
-	m.seqFirstNoteF = seqOptionsCb.val1[2] == 1 and true or false -- 1st Note Always
-	m.seqAccentF = 		seqOptionsCb.val1[3] == 1 and true or false -- Accent
-	m.seqLegatoF = 		seqOptionsCb.val1[4] == 1 and true or false -- Legato
-	m.seqRndNotesF = 	seqOptionsCb.val1[5] == 1 and true or false -- Randomize Notes
-	m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Repeat
-	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
-	pExtSaveStateF = true
-	if debug or m.debug then PrintTable(seqOptionsCb.val1) end
-end
-
--- Euclid options
+-- Euclidizer options
 eucOptionsCb.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\neucOptionsCb.onLClick()") end
@@ -1348,98 +1737,6 @@ eucOptionsCb.onLClick = function()
 	pExtSaveStateF = true
 	if debug or m.debug then PrintTable(eucOptionsCb.val1) end
 end
-
---------------------------------------------------------------------------------
--- Droplists
---------------------------------------------------------------------------------
--- Window zoom
-zoomDrop.onLClick = function() -- window scaling
-	local debug = false
-	if debug or m.debug then ConMsg("\nzoomDrop.onLClick()") end
-	    if zoomDrop.val1 ==  1 then e.gScale = 0.7
-	elseif zoomDrop.val1 ==  2 then e.gScale = 0.8
-	elseif zoomDrop.val1 ==  3 then e.gScale = 0.9
-	elseif zoomDrop.val1 ==  4 then e.gScale = 1  
-	elseif zoomDrop.val1 ==  5 then e.gScale = 1.1
-	elseif zoomDrop.val1 ==  6 then e.gScale = 1.2
-	elseif zoomDrop.val1 ==  7 then e.gScale = 1.4
-	elseif zoomDrop.val1 ==  8 then e.gScale = 1.6
-	elseif zoomDrop.val1 ==  9 then e.gScale = 1.8
-	elseif zoomDrop.val1 == 10 then e.gScale = 2.0
-	end
-	if debug or m.debug then ConMsg("zoom = " .. tostring(e.gScale)) end
-	-- Save state, close and reopen GFX window
-	if not pExtState.win_x then
-		__, m.win_x, m.win_y, __, __ = gfx.dock(-1,0,0,0,0)
-	else
-		-- set project ext state
-		pExtState.zoomDrop = zoomDrop.val1
-		pExtSaveStateF = true		
-	end
-	m.zoomF = true
-end
--- Root Key
-keyDrop.onLClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("\nkeyDrop.onLClick()") end
-	m.key = keyDrop.val1
-	m.root = SetRootNote(m.oct, m.key)	
-	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
-	-- set project ext state
-	pExtState.key = m.key
-	pExtState.root = m.root
-	pExtSaveStateF = true
-end
--- Octave
-octDrop.onLClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("\noctDrop.onLClick()") end
-	m.oct = octDrop.val1
-	m.root = SetRootNote(m.oct, m.key)
-	-- set project ext state	
-	pExtState.oct = m.oct
-	pExtState.root = m.root
-	pExtSaveStateF = true
-end
--- Scale
-scaleDrop.onLClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("\nscaleDrop.onLClick()") end
-	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
-	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
-	-- set project ext state	
-	pExtState.curScaleName = scaleDrop.val2[scaleDrop.val1]
-	pExtSaveStateF = true
-end	
-
---------------------------------------------------------------------------------
--- Radio Buttons
---------------------------------------------------------------------------------
-seqGridRad.onLClick = function() -- change grid size
-	local debug = false
-	if debug or m.debug then ConMsg("\nseqGridRad.onLClick()") end
-	if m.activeTake then
-		if seqGridRad.val1 == 1 then -- 1/16 grid
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40192) -- set grid 1/16
-			if BitCheck(m.seqGridRadBF, 16) then
-				seqSldr16.val1 = 8; seqSldr8.val1 = 8; seqSldr4.val1 = 0; seqSldrRest.val1 = 4
-			end
-		elseif seqGridRad.val1 == 2 then -- 1/8 grid
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40197) -- set grid 1/8
-			if BitCheck(m.seqGridRadBF, 8) then
-				seqSldr16.val1 = 0; seqSldr8.val1 = 8; seqSldr4.val1 = 2; seqSldrRest.val1 = 2
-			end
-		elseif seqGridRad.val1 == 3 then -- 1/4 grid
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40201) -- set grid 1/4
-			if BitCheck(m.seqGridRadBF, 4) then
-				seqSldr16.val1 = 0; seqSldr8.val1 = 2; seqSldr4.val1 = 8; seqSldrRest.val1 = 1
-			end
-		end -- seGridRad
-	end -- m.activeTake
-end
---------------------------------------------------------------------------------
--- Sliders
---------------------------------------------------------------------------------
 -- Euclid pulses slider 
 euclidPulsesSldr.onMove = function()
 	local debug = false
@@ -1474,94 +1771,10 @@ euclidRotationSldr.onMove = function()
 		euclidRotationSldr.max = euclidRotationSldr.val1
 	end
 end
-
---------------------------------------------------------------------------------
--- Init GUI ProjectExtState Load Functions
---------------------------------------------------------------------------------
-function setDefaultWindowOpts()
+-- Set default euclid options
+function SetDefaultEucOptions()
 	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultWinOpts()") end
-	if pExtState.zoomDrop then
-		zoomDrop.val1 = pExtState.zoomDrop
-	end
-	if pExtState.win_x or pExtState.win_y then
-		m.win_x = pExtState.win_x
-		m.win_y = pExtState.win_y
-	end
-	zoomDrop.onLClick()
-end
---------------------------------------------------------------------------------
-function setDefaultScaleOpts()
-	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultScaleOpts()") end
-	-- if key saved in project state, load it
-	if pExtState.key then 
-		m.key = math.floor(tonumber(pExtState.key))
-		keyDrop.val1 = m.key
-	end
-	-- if octave saved in project state, load it
-	if pExtState.oct then 
-		m.oct = math.floor(tonumber(pExtState.oct))
-		octDrop.val1 = m.oct
-	end
-	-- set the midi note number for scale root
-	m.root = SetRootNote(m.oct, m.key) 
-	-- create a scale name lookup table for the gui (scaleDrop)
-	for k, v in pairs(m.scales) do
-		m.scalelist[k] = m.scales[k]["name"]
-	end
-	-- if scale name saved in project state, load it
-	if pExtState.curScaleName then
-		m.curScaleName = pExtState.curScaleName
-	end
-	-- update the scale dropbox val1 to match the scale table index
-	for k, v in pairs(m.scales) do 
-		if v.name == m.curScaleName then scaleDrop.val1 = k	end
-	end	
-
-	SetScale(m.curScaleName, m.scales, m.preNoteProbTable)	--set chosen scale
-	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable) -- set sliders labels to current scale notes
-end
---------------------------------------------------------------------------------
-function setDefaultRndOptions()
-	local debug = false
-	if debug or m.debug then ConMsg("setDefaultRndOptions()") end
-	-- if randomizer options were saved to project state, load them
-	if pExtState.noteOptionsCb then
-		m.rndAllNotesF =  pExtState.noteOptionsCb[1] == true and true or false 
-		m.rndFirstNoteF = pExtState.noteOptionsCb[2] == true and true or false
-		m.rndOctX2F =     pExtState.noteOptionsCb[3] == true and true or false
-		end
-	-- set randomizer options using defaults, or loaded project state
-	noteOptionsCb.val1[1] = (true and m.rndAllNotesF) and 1 or 0 -- all notes
-	noteOptionsCb.val1[2] = (true and m.rndFirstNoteF) and 1 or 0 -- first note root
-	noteOptionsCb.val1[3] = (true and m.rndOctX2F) and 1 or 0 -- octave doubler
-end
---------------------------------------------------------------------------------
-function setDefaultSeqOptions()
-	local debug = false
-	if debug or m.debug then ConMsg("setDefaultSeqOptions()") end
-	-- if sequencer options were saved to project state, load them
-	if pExtState.seqOptionsCb then 
-		m.seqF = 					pExtState.seqOptionsCb[1] ==  true and true or false
-		m.seqFirstNoteF = pExtState.seqOptionsCb[2] ==  true and true or false
-		m.seqAccentF = 		pExtState.seqOptionsCb[3] ==  true and true or false
-		m.seqLegatoF = 		pExtState.seqOptionsCb[4] ==  true and true or false
-		m.seqRndNotesF = 	pExtState.seqOptionsCb[5] ==  true and true or false
-		m.seqRepeatF = 		pExtState.seqOptionsCb[6] ==  true and true or false
-	end
-	-- set sequencer options using defaults, or loaded project state
-	seqOptionsCb.val1[1] = (true and m.seqF) and 1 or 0 -- generate
-	seqOptionsCb.val1[2] = (true and m.seqFirstNoteF) and 1 or 0 -- 1st Note Always
-	seqOptionsCb.val1[3] = (true and m.seqAccentF) and 1 or 0 -- accent
-	seqOptionsCb.val1[4] = (true and m.seqLegatoF) and 1 or 0 -- legato
-	seqOptionsCb.val1[5] = (true and m.seqRndNotesF) and 1 or 0 -- random notes
-	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0 -- repeat
-end
---------------------------------------------------------------------------------
-function setDefaultEucOptions()
-	local debug = false
-	if debug or m.debug then ConMsg("setDefaultEucOptions()") end
+	if debug or m.debug then ConMsg("SetDefaultEucOptions()") end
 	-- if euclidean options were saved to project state, load them
 	if pExtState.eucOptionsCb then 
 		m.eucF = 					pExtState.eucOptionsCb[1] ==  true and true or false
@@ -1573,56 +1786,10 @@ function setDefaultEucOptions()
 	eucOptionsCb.val1[2] = (true and m.eucAccentF) and 1 or 0 -- accents
 	eucOptionsCb.val1[3] = (true and m.eucRndNotesF) and 1 or 0 -- randomize notes
 end
---------------------------------------------------------------------------------
-function setDefaultRndSliders()
+-- Set default euclid sliders
+function SetDefaultEucSliders()
 	local debug = false
-	if debug or m.debug then ConMsg("setDefaultRndSliders()") end
-	-- if randomizer sliders were saved to project state, load them
-	if pExtState.noteSliders then
-		for k, v in pairs(t_noteSliders) do
-			v.val1 = pExtState.noteSliders[k]
-		end
-	else
-		for k, v in pairs(t_noteSliders) do
-			v.val1 = 1
-		end
-	end -- load note sliders pExtState
-	if pExtState.rndOctProb then -- octave probability slider
-		octProbSldr.val1 = pExtState.rndOctProb
-	else
-		octProbSldr.val1 = m.rndOctProb
-	end
-end
---------------------------------------------------------------------------------
-function setDefaultSeqSliders()
-	local debug = false
-	if debug or m.debug then ConMsg("setDefaultSeqSliders()") end
-	-- if seq accent & legato sliders were saved to project state, load them
-	if pExtState.seqAccRSldrLo then 
-		seqAccRSldr.val1 = pExtState.seqAccRSldrLo
-	else
-		seqAccRSldr.val1 = m.accentLow
-	end
-	if pExtState.seqAccRSldrHi then 
-		seqAccRSldr.val2 = pExtState.seqAccRSldrHi
-	else
-		seqAccRSldr.val2 = m.accentHigh
-	end
-	if pExtState.seqAccProb then 
-		seqAccProbSldr.val1 = pExtState.seqAccProb
-	else
-		seqAccProbSldr.val1	= m.accentProb
-	end
-	if pExtState.seqLegProb then 
-		seqLegProbSldr.val1 = pExtState.seqLegProb
-	else
-		seqLegProbSldr.val1 = m.legatoProb
-	end
-end
---------------------------------------------------------------------------------
-function setDefaultEucSliders()
-	local debug = false
-	if debug or m.debug then ConMsg("setDefaultEucSliders()") end
+	if debug or m.debug then ConMsg("SetDefaultEucSliders()") end
 	-- if euclidean sliders were saved to project state, load them
 	if pExtState.eucSliders then
 		for k, v in pairs(t_euclidSliders) do
@@ -1634,25 +1801,21 @@ function setDefaultEucSliders()
 		euclidRotationSldr.val1 = m.eucRot
 	end -- load pExtState
 end
---------------------------------------------------------------------------------
-function setSeqGridSliders()
---[[
-	m.seqGridRadBF = 65808 -- bitfield for setting initial sequencer note length sliders
-	m.seqGrid16 = {8, 8, 0, 4} -- sane default sequencer note length slider values
-	m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
-	m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
-	if seqGridRad.val1 == 1 then -- 1/16 grid
-		reaper.MIDIEditor_OnCommand(m.activeEditor, 40192) -- set grid 1/16 
-		seqSldr16.val1 = 8; seqSldr8.val1 = 8; seqSldr4.val1 = 0; seqSldrRest.val1 = 4        
-	elseif seqGridRad.val1 == 2 then -- 1/8 grid
-		seqSldr16.val1 = 0; seqSldr8.val1 = 8; seqSldr4.val1 = 2; seqSldrRest.val1 = 2      
-		reaper.MIDIEditor_OnCommand(m.activeEditor, 40197) -- set grid 1/8  
-	elseif seqGridRad.val1 == 3 then -- 1/4 grid
-		reaper.MIDIEditor_OnCommand(m.activeEditor, 40201) -- set grid 1/4 
-		seqSldr16.val1 = 0; seqSldr8.val1 = 2; seqSldr4.val1 = 8; seqSldrRest.val1 = 1        
-	end -- seGridRad
---]]
+-- Reset euclidean sliders
+txtEuclidLabel.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\ntxtEuclidLabel.onLClick()") end
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Euclid Sliders")
+	if result == 1 then 
+		euclidPulsesSldr.val1 = m.eucPulses
+		euclidStepsSldr.val1 = m.eucSteps
+		euclidRotationSldr.val1 = m.eucRot
+		pExtSaveStateF = true
+		pExtState.eucSliders = nil
+	end -- result
 end
+
 --------------------------------------------------------------------------------
 -- Draw GUI
 --------------------------------------------------------------------------------
@@ -1709,17 +1872,12 @@ function InitMidiExMachina()
 		end -- pExtLoadStateF
 		
 	-- set GUI defaults or restore from project state
-	setDefaultWindowOpts()
-	setDefaultScaleOpts()
-	setDefaultRndOptions(); setDefaultRndSliders()
-	setDefaultSeqOptions(); setDefaultSeqSliders()
-	setDefaultEucOptions(); setDefaultEucSliders()
+	SetDefaultWindowOpts()
+	SetDefaultScaleOpts()
+	SetDefaultRndOptions(); SetDefaultRndSliders()
+	SetDefaultSeqOptions(); SetDefaultSeqGridSliders(); SetDefaultAccLegSliders()
+	SetDefaultEucOptions(); SetDefaultEucSliders()
 
-	SetSeqGridSizes(t_seqSliders)
-	--set sane default sequencer grid slider values
-	seqGridRad.onLClick()	
-	GetReaperGrid(seqGridRad)
-	
 	GetItemLength()
 	GetNotesFromTake() -- grab the original note data (if any...)
 	if debug or m.debug then ConMsg("End InitMidiExMachina()\n") end
@@ -1816,7 +1974,7 @@ function MainLoop()
 			m.reaGrid, __, __ = reaper.MIDI_GetGrid(m.activeTake)
 			if grid ~= m.reaGrid then 
 				GetReaperGrid(seqGridRad)
-				seqGridRad.onLClick() -- set sane defaults for sequencer
+				seqGridRad.onLClick() -- update the sequence grid sizes
 			end -- grid
 		else -- handle m.activeTake error
 			ShowMessage(msgText, 1) 
@@ -1829,6 +1987,7 @@ function MainLoop()
 		m.activeTake = nil
 	end -- m.activeEditor
 end
+
 --------------------------------------------------------------------------------
 -- RUN
 --------------------------------------------------------------------------------
