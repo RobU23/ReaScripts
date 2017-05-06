@@ -1003,9 +1003,9 @@ end
 local winFrame = e.Frame:new({0}, 5, 5, m.win_w - 10, m.win_h - 10, e.col_grey4)
 local zoomDrop = e.Droplist:new({0}, 5, 5, 40, 22, e.col_green, "", e.Arial, 16, e.col_grey8, 4, {"70%", "80%", "90%", "100%", "110%", "120%", "140%", "160%", "180%", "200%"})
 local winText = e.Textbox:new({0}, 45, 5, m.win_w - 50, 22, e.col_green, "MIDI Ex Machina    ", e.Arial, 16, e.col_grey8)
-local layerBtn01 = e.Button:new({0}, 5, m.win_h - 25, 100, 20, e.col_green, "Notes", e.Arial, 16, e.col_grey8)
+local layerBtn01 = e.Button:new({0}, 5, m.win_h - 25, 100, 20, e.col_green, "Randomizer", e.Arial, 16, e.col_grey8)
 local layerBtn02 = e.Button:new({0}, 105, m.win_h - 25, 100, 20, e.col_grey5, "Sequencer", e.Arial, 16, e.col_grey7)
-local layerBtn03 = e.Button:new({0}, 205, m.win_h - 25, 100, 20, e.col_grey5, "Euclid", e.Arial, 16, e.col_grey7)
+local layerBtn03 = e.Button:new({0}, 205, m.win_h - 25, 100, 20, e.col_grey5, "Euclidizer", e.Arial, 16, e.col_grey7)
 local layerBtn04 = e.Button:new({0}, 305, m.win_h - 25, 100, 20, e.col_grey5, "Options", e.Arial, 16, e.col_grey7)
 local undoBtn = e.Button:new({0}, m.win_w-85, m.win_h -25, 40, 20, e.col_grey5, "Undo", e.Arial, 16, e.col_grey7)
 local redoBtn = e.Button:new({0}, m.win_w-45, m.win_h -25, 40, 20, e.col_grey5, "Redo", e.Arial, 16, e.col_grey7)
@@ -1058,7 +1058,7 @@ local noteOptionText = e.Textbox:new({1}, nx+(np*14)+20, 210, (nw*4), 20, e.col_
 -- Sequencer Layer
 --------------------------------------------------------------------------------
 -- sequence generate button
-local sequenceBtn = e.Button:new({2}, 25, 205, 110, 25, e.col_yellow, "Generate", e.Arial, 16, e.col_grey8)
+local sequenceBtn = e.Button:new({2}, 25, 205, 110, 25, e.col_yellow, "Sequence", e.Arial, 16, e.col_grey8)
 local sx, sy, sw, sh, sp = 160, 50, 30, 150, 40
 -- sequencer grid size radio selector
 local seqGridRad = e.Rad_Button:new({2,3}, sx, sy + 40, 30, 30, e.col_yellow, "", e.Arial, 16, e.col_grey8, 1, {"1/16", "1/8", "1/4"})
@@ -1092,7 +1092,7 @@ local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 14) + 10, sy + 5, 30, 30, e.co
 -- Euclid Layer
 --------------------------------------------------------------------------------
 -- euclid generate button
-local euclidBtn = e.Button:new({3}, 25, 205, 110, 25, e.col_orange, "Generate", Arial, 16, e.col_grey8)
+local euclidBtn = e.Button:new({3}, 25, 205, 110, 25, e.col_orange, "Euclidize", Arial, 16, e.col_grey8)
 -- euclidean sliders
 local ex, ey, ew, eh, ep = 160, 50, 30, 150, 40
 --local vslider01 = e.Vert_Slider:new({1}, x, y, w, h, col, "label", Font, 16, e.col_grey8, v1,v2, min, max, step)
