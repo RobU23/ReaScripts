@@ -1100,6 +1100,8 @@ end
 function e.Textbox:draw()
 	if (self.tab & (1 << e.gActiveLayer)) == 0 and self.tab ~= 0 then return end
 	self:update_zoom() -- check and update if window resized
+	-- in elm R_up (released and was previously pressed), run onRClick (user defined)
+	if self:mouseRClick() and self.onRClick then self.onRClick() end
 	gfx.set(self.r, self.g, self.b, self.a) -- set the drawing colour for the e.Element
 	self:draw_body()
 	self:draw_frame()
