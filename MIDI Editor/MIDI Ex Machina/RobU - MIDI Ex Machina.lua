@@ -1,14 +1,14 @@
 --[[
-@description MIDI Ex Machina - Note Randomizer and Sequencer
+@description MIDI Ex Machina - Note Randomiser, Sequencer, and Euclidean Generator
 @about
 	#### MIDI Ex Machina
 	A scale-oriented, probability based composition tool
  
 	#### Features
-	note randomizer
+	note randomiser
 	- selectable root note, octave, scale
 	- note probability sliders
-	- randomize all or selected notes
+	- randomise all or selected notes
 	- octave doubler, with probability slider 
 	- force first note to root note option 
 	- permute selected notes
@@ -28,14 +28,25 @@
 @donation https://www.paypal.me/RobUrquhart
 @link Reaper http://reaper.fm
 @link Forum Thread http://reaper.fm
-@version 1.2.1
+@version 1.3
 @author RobU
 @changelog
-	v1.2.1
+	v1.2
 	added monophonic sequence generator
-	added euclidean sequence generator (bjorklund)
-	added permute option in note randomizer
-	added octave multiplier in note randomizer
+	added euclidean sequence generator (bjorklund algorithm) 
+	v1.3
+	added all/selected notes option
+	added force first note to root option
+	added randomise octave option
+	added permute scale in note randomiser
+	added force first note in sequence generator
+	added velocity/accent randomisation to sequence/euclidean generators
+	added legato randomisation to sequence generator
+	added rotation slider to euclidean generator
+	added active-take detection
+	added undo/redo
+	added script state save/restore to Reaper project file
+	added right-click reset for sliders (right-click the textbox)
 @provides
 	[main=midi_editor] .
 	[nomain] eGUI.lua
@@ -59,11 +70,10 @@ local p = require 'persistence' -- currently unused, i.e. no preset save, load, 
 -- GLOBAL VARIABLES START
 --------------------------------------------------------------------------------
 m = {} -- all ex machina data
--- user changeable defaults values are marked with "(option)"
+-- user changeable defaults are marked with "(option)"
 m.debug = false
-m.msgTimer = 30
 -- window
-m.win_title = "RobU : MIDI Ex Machina - v1.2.1"; m.win_dockstate = 0
+m.win_title = "RobU : MIDI Ex Machina - v1.3"; m.win_dockstate = 0
 m.win_x = 10; m.win_y = 10; m.win_w = 900; m.win_h = 300 -- window dimensions
 m.win_bg = {0, 0, 0} -- background colour
 m.def_zoom = 4 -- 100% (option)
@@ -79,14 +89,14 @@ m.activeEditor, m.activeTake = nil, nil
 m.ppqn = 960; -- default ppqn, no idea how to check if this has been changed.. 
 m.reaGrid = 0
 
--- note randomizer
+-- note randomiser
 m.rndAllNotesF = false -- all notes or only selected notes (option)
 m.rndOctX2F = false -- enable double scale randomisation (option)
 m.rndFirstNoteF = true; -- first note is always root (option)
 m.rndPermuteF = false; m.pHash = 0 -- midi item state changes
 m.rndOctProb = 1 -- (option - min 0, max 10)
 
--- sequencer
+-- sequence generator
 m.seqF = true -- generate sequence (option)
 m.seqFirstNoteF = true -- first note always (option)
 m.seqAccentF = true -- generate accents (option)
@@ -102,16 +112,16 @@ m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
 m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
 m.repeatStart, m.repeatEnd, m.repeatLength, m.repeatTimes = 0, 0, 0, 0 -- repeat values (currently unused)
 
--- euclidizer
+-- euclidean generator
 m.eucF = true	-- generate euclid (option)
 m.eucAccentF = false	-- generate accents (option)
-m.eucRndNotesF = false	-- randomize notes (option)
+m.eucRndNotesF = false	-- randomise notes (option)
 m.eucPulses = 3; m.eucSteps = 8; m.eucRot = 0 -- default values (options)
 
 -- note buffers and current buffer index
 m.notebuf = {}; m.notebuf.i = 0; m.notebuf.max = 0
 
-m.dupes = {} -- for duplicate note detection while randomizing
+m.dupes = {} -- for duplicate note detection while randomising
 m.euclid = {} -- for pattern generation
 
 m.notes = {'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'C'}
@@ -129,7 +139,7 @@ m.scales = {
 	{0, 3, 5, 7, 10, 12,name = "Pentatonic Minor"},
 	{name = "Permute"}
 }  
--- a list of scales available to the mangling engine, more can be added manually if required
+-- a list of scales available to the note randomiser, more can be added manually if required
 -- each value is the interval step from the root note of the scale (0) including the octave (12)
 
 -- textual list of the available scale names for the GUI list selector
@@ -205,28 +215,9 @@ end
 local function ConMsg(str)
 	reaper.ShowConsoleMsg(str .."\n")
 end
---------------------------------------------------------------------------------
--- GfxConMsg() - prints str & mouse pos at xpos, ypos
---------------------------------------------------------------------------------
-local function GfxCon(xpos, ypos, str)
-	local floor = math.floor
-	local fstr = ""
-	local padx, pady = 20, 20
-	local mx, my = 0, 0
-	gfx.set(RGB2Dec(200, 200, 200))
-	gfx.setfont(1, "Arial", 14)	-- 9 is the debug font
-	--mx = floor(gfx.mouse_x); my = floor(gfx.mouse_y) -- get the mouse pos
-	--fstr = fstr .. "\nm_x = " .. tostring(x) .. " m_y = " .. tostring(y)
-	fstr = fstr .. "\n" .. str
-	local strw, strh = gfx.measurestr(fstr)	-- measure it...
-	gfx.x = xpos + m.win_w - strw	- padx -- set the print position, with padding
-	gfx.y = ypos + pady	-- set the print position, with padding
-	gfx.drawstr(fstr)
-end
 
 --------------------------------------------------------------------------------
 -- Pickle table serialization - Steve Dekorte, http://www.dekorte.com, Apr 2000
--- Freeware
 --------------------------------------------------------------------------------
 function pickle(t)
 	return Pickle:clone():pickle_(t)
@@ -376,8 +367,6 @@ local function UndoNoteBuf()
 	local debug = false
 	if debug or m.debug then ConMsg("UndoNoteBuf()") end
 	if m.notebuf.i > 1 then
-		--table.remove(m.notebuf[m.notebuf.i])
-		--m.notebuf[m.notebuf.i] = nil
 		m.notebuf.i = m.notebuf.i -1
 		if debug or m.debug then
 			str = "removed buffer " .. tostring(m.notebuf.i + 1) .. "\n"
@@ -397,9 +386,11 @@ end
 --------------------------------------------------------------------------------
 local function PurgeNoteBuf()
 	local debug = false
-	if debug or m.debug then ConMsg("PurgeNoteBuf()") end
-	if debug or m.debug then ConMsg("current idx = " .. tostring(m.notebuf.i)) end
-	if debug or m.debug then ConMsg("max idx     = " .. tostring(m.notebuf.max)) end
+	if debug or m.debug then
+		ConMsg("PurgeNoteBuf()")
+		ConMsg("current idx = " .. tostring(m.notebuf.i))
+		ConMsg("max idx     = " .. tostring(m.notebuf.max))
+	end
 	while m.notebuf.max > m.notebuf.i do
 		m.notebuf[m.notebuf.max] = nil
 		if debug or m.debug then ConMsg("purging buffer " .. tostring(m.notebuf.max))
@@ -409,10 +400,11 @@ local function PurgeNoteBuf()
 end
 --------------------------------------------------------------------------------
 -- GetItemLength(t) - get length of take 't', set various global vars
--- currently it only returns the item length (used in Sequencer and Bjorklund)
+-- currently it only returns the item length (used in Sequencer and Euclid)
 --------------------------------------------------------------------------------
 function GetItemLength()
 	local debug = false
+	if debug or m.debug then ConMsg("GetItemLength()") end
 	mItem = reaper.GetSelectedMediaItem(0, 0)
 	mItemLen = reaper.GetMediaItemInfo_Value(mItem, "D_LENGTH")
 	mBPM, mBPI = reaper.GetProjectTimeSignature2(0)
@@ -421,7 +413,7 @@ function GetItemLength()
 	numQNPerItem = (mItemLen * 1000) / msPerQN
 	numBarsPerItem = numQNPerItem / 4
 	ItemPPQN = numQNPerItem * m.ppqn
-	if debug then
+	if debug or m.debug then
 		ConMsg("ItemLen (ms)    = " .. mItemLen)
 		ConMsg("mBPM            = " .. mBPM)
 		ConMsg("MS Per QN       = " .. msPerQN)
@@ -429,7 +421,6 @@ function GetItemLength()
 		ConMsg("Num of Bar      = " .. numBarsPerItem)
 		ConMsg("Item size ppqn  = " .. ItemPPQN .. "\n")
 	end
-	if debug or m.debug then ConMsg("GetItemLength() = " .. tostring(ItemPPQN)) end
 	return ItemPPQN
 end
 --------------------------------------------------------------------------------
@@ -440,13 +431,9 @@ function GetReaperGrid(gridRad)
 	if debug or m.debug then ConMsg("GetReaperGrid()") end
 	if m.activeTake then
 		m.reaGrid, __, __ = reaper.MIDI_GetGrid(m.activeTake) -- returns quarter notes
-		if gridRad then -- else, if a grid object was passed, update it
-		--if m.reaGrid <= 0.17 then gridRad.val1 = 1 -- 1/16t
+		if gridRad then -- if a grid object was passed, update it
 			if m.reaGrid == 0.25 then gridRad.val1 = 1 -- 1/16
-		--elseif m.reaGrid == 0.25 then gridRad.val1 = 2 -- 1/16
-		--elseif m.reaGrid == 0.33 then gridRad.val1 = 3 -- 1/8t
 			elseif m.reaGrid == 0.5 then gridRad.val1 = 2 -- 1/8
-		--elseif m.reaGrid == 0.67 then gridRad.val1 = 5 -- 1/4t
 			elseif m.reaGrid == 1 then gridRad.val1 = 3 -- 1/4
 			end -- m.reaGrid
 		end
@@ -478,7 +465,7 @@ function GetPermuteScaleFromTake(t)
 	end -- m.activeTake	
 end
 --------------------------------------------------------------------------------
--- GetNotesFromTake(t) - fill a note buffer from the active take
+-- GetNotesFromTake() - fill a note buffer from the active take
 --------------------------------------------------------------------------------
 function GetNotesFromTake()
 	local debug = false
@@ -643,11 +630,8 @@ function SetSeqGridSizes(sliderTable)
 	local debug = false
 	if debug or m.debug then ConMsg("SetSeqGridSizes()") end
 	for k, v in pairs(sliderTable) do
-		--if sliderTable[k].label == "1/16t" then m.preSeqProbTable[k] = 0.167 
 		if sliderTable[k].label == "1/16" then m.preSeqProbTable[k] = 0.25
-		--elseif sliderTable[k].label == "1/8t" then m.preSeqProbTable[k] = 0.333
 		elseif sliderTable[k].label == "1/8" then m.preSeqProbTable[k] = 0.5
-		--elseif sliderTable[k].label == "1/4t" then m.preSeqProbTable[k] = 0.667
 		elseif sliderTable[k].label == "1/4" then m.preSeqProbTable[k] = 1.0
 		elseif sliderTable[k].label == "Rest" then m.preSeqProbTable[k] = -1.0
 		end
@@ -657,12 +641,13 @@ end
 -- UpdateSliderLabels() args t_noteSliders, m.preNoteProbTable
 -- sets the sliders to the appropriate scale notes, including blanks
 --------------------------------------------------------------------------------
-function UpdateSliderLabels(sliderTable, preProbTable) -- needs an offset for the root note
+function UpdateSliderLabels(sliderTable, preProbTable)
 	local debug = false
 	if debug or m.debug then ConMsg("UpdateSliderLabels()") end
 	for k, v in pairs(sliderTable) do
 		if preProbTable[k] then -- if there's a Scale note
-			sliderTable[k].label = m.notes[Wrap((preProbTable[k] + 1) + m.root, 12)] -- set the slider to the note name
+			-- set the slider to the note name
+			sliderTable[k].label = m.notes[Wrap((preProbTable[k] + 1) + m.root, 12)]
 			if sliderTable[k].val1 == 0 then sliderTable[k].val1 = 1 end
 		else
 			sliderTable[k].label = ""
@@ -713,18 +698,18 @@ function GetUniqueNote(tNotes, noteIdx, noteProbTable, octProbTable)
 	end -- if #m.dupes
 end
 --------------------------------------------------------------------------------
--- RandomizeNotesPoly(notebufs t1,t2, noteProbTable)
+-- RandomiseNotesPoly(notebufs t1,t2, noteProbTable)
 --------------------------------------------------------------------------------
-function RandomizeNotesPoly(noteProbTable)
+function RandomiseNotesPoly(noteProbTable)
 	local debug = false
-	if debug or m.debug then ConMsg("RandomizeNotesPoly()") end
+	if debug or m.debug then ConMsg("RandomiseNotesPoly()") end
 	m.dupes.i = 1
 	local  i = 1
 	local t1, t2 = GetNoteBuf(), NewNoteBuf()
 	CopyTable(t1, t2)
 	while t2[i] do
 		if t2[i][1] == true or m.rndAllNotesF then -- if selected, or all notes flag is true
-			if i == 1 and m.rndFirstNoteF then
+			if i == 1 and m.rndFirstNoteF then -- if selected, the first not is always root of scale
 				t2[i][7] = m.root
 			else
 				t2[i][7] = GetUniqueNote(t1, i, noteProbTable, m.octProbTable)
@@ -748,7 +733,6 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 	local t, t2 = NewNoteBuf(), GetNoteBuf()
 	CopyTable(t2, t)
 	GetReaperGrid() -- populates m.reaGrid
-	--t = GetNoteBuf(); if t == nil then t = NewNoteBuf() end --pre-undo
 	ClearTable(t)
 	local itemPos = 0
 	local gridSize = m.reaGrid * m.ppqn
@@ -857,7 +841,7 @@ function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 	InsertNotes()
 end
 --------------------------------------------------------------------------------
--- GenNoteAttributes(acc, leg) -- accent, legato only
+-- GenNoteAttributes(accF, accProb, accVal, legF, legVal) -- accent, legato only
 --------------------------------------------------------------------------------
 function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 	local debug = false
@@ -877,11 +861,8 @@ function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 				if legF then -- handle legato flag (3 = noteStart, 4 = noteEnd, 5 = noteLen)
 					noteLen = t2[i][5]
 					if noteLen >= 960 + m.legato and noteLen <= 960 - m.legato then noteLen = 960 -- 1/4
-				--elseif noteLen >= 642 + m.legato and noteLen <= 644 - m.legato then noteLen = 643.2 -- 1/4t
 					elseif noteLen >= 480 + m.legato and noteLen <= 480 - m.legato then noteLen = 480 -- 1/8
-				--elseif noteLen >= 315 + m.legato and noteLen <= 317 - m.legato then noteLen = 316.8 -- 1/8t
 					elseif noteLen >= 240 + m.legato and noteLen <= 240 - m.legato then noteLen = 240 -- 1/16
-				--elseif noteLen >= 162 + m.legato and noteLen <= 164 - m.legato then noteLen = 163.2 -- 1/16t
 					end
 					t2[i][4] = t2[i][3] + noteLen + legProbTable[math.random(1, #legProbTable)]
 				end -- legato     
@@ -899,8 +880,6 @@ end
 function SetNotes()
 	local debug = false
 	if debug or m.debug then ConMsg("SetNotes()") end
-	--get repeat info 
-	--get item length
 	local i = 1
 	if m.activeTake then
 		local t1 = GetNoteBuf()
@@ -921,8 +900,6 @@ end
 function InsertNotes()
 	local debug = false
 	if debug or m.debug then ConMsg("InsertNotes()") end
-	--get repeat info 
-	--get item length
 	DeleteNotes()
 	local i = 1
 	if m.activeTake then
@@ -935,7 +912,7 @@ function InsertNotes()
 		reaper.MIDI_Sort(m.activeTake)
 		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
 	else
-		ConMsg("Error in InsertNotes() - No Active Take")
+		if debug or m.debug then ConMsg("No Active Take") end
 	end -- m.activeTake
 end
 --------------------------------------------------------------------------------
@@ -1002,10 +979,10 @@ end
 -- Persistent window elements
 local winFrame = e.Frame:new({0}, 5, 5, m.win_w - 10, m.win_h - 10, e.col_grey4)
 local zoomDrop = e.Droplist:new({0}, 5, 5, 40, 22, e.col_green, "", e.Arial, 16, e.col_grey8, 4, {"70%", "80%", "90%", "100%", "110%", "120%", "140%", "160%", "180%", "200%"})
-local winText = e.Textbox:new({0}, 45, 5, m.win_w - 50, 22, e.col_green, "MIDI Ex Machina    ", e.Arial, 16, e.col_grey8)
-local layerBtn01 = e.Button:new({0}, 5, m.win_h - 25, 100, 20, e.col_green, "Randomizer", e.Arial, 16, e.col_grey8)
+local winText  = e.Textbox:new({0}, 45, 5, m.win_w - 50, 22, e.col_green, "MIDI Ex Machina    ", e.Arial, 16, e.col_grey8)
+local layerBtn01 = e.Button:new({0}, 5, m.win_h - 25, 100, 20, e.col_green, "Randomiser", e.Arial, 16, e.col_grey8)
 local layerBtn02 = e.Button:new({0}, 105, m.win_h - 25, 100, 20, e.col_grey5, "Sequencer", e.Arial, 16, e.col_grey7)
-local layerBtn03 = e.Button:new({0}, 205, m.win_h - 25, 100, 20, e.col_grey5, "Euclidizer", e.Arial, 16, e.col_grey7)
+local layerBtn03 = e.Button:new({0}, 205, m.win_h - 25, 100, 20, e.col_grey5, "Euclidiser", e.Arial, 16, e.col_grey7)
 local layerBtn04 = e.Button:new({0}, 305, m.win_h - 25, 100, 20, e.col_grey5, "Options", e.Arial, 16, e.col_grey7)
 local undoBtn = e.Button:new({0}, m.win_w-85, m.win_h -25, 40, 20, e.col_grey5, "Undo", e.Arial, 16, e.col_grey7)
 local redoBtn = e.Button:new({0}, m.win_w-45, m.win_h -25, 40, 20, e.col_grey5, "Redo", e.Arial, 16, e.col_grey7)
@@ -1023,12 +1000,12 @@ local scaleDrop = e.Droplist:new({1, 2, 3}, dx, dy + 90, dw, dh, e.col_blue, "Sc
 local t_Droplists = {keyDrop, octDrop, scaleDrop} 
 
 --------------------------------------------------------------------------------
--- Notes Layer
+-- Randomiser Layer
 --------------------------------------------------------------------------------
--- note randomize button
-local randomBtn = e.Button:new({1}, 25, 205, 110, 25, e.col_green, "Randomize", e.Arial, 16, e.col_grey8)
+-- note randomise button
+local randomBtn = e.Button:new({1}, 25, 205, 110, 25, e.col_green, "Generate", e.Arial, 16, e.col_grey8)
 -- note weight sliders
-local nx, ny, nw, nh, np = 160, 50, 30, 150, 40 -- Tie this anchor to the Notes Section Frame, and rename vars
+local nx, ny, nw, nh, np = 160, 50, 30, 150, 40
 local noteSldr01 = e.Vert_Slider:new({1}, nx,        ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
 local noteSldr02 = e.Vert_Slider:new({1}, nx+(np*1), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
 local noteSldr03 = e.Vert_Slider:new({1}, nx+(np*2), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
@@ -1042,10 +1019,10 @@ local noteSldr10 = e.Vert_Slider:new({1}, nx+(np*9), ny, nw, nh, e.col_blue, "",
 local noteSldr11 = e.Vert_Slider:new({1}, nx+(np*10), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
 local noteSldr12 = e.Vert_Slider:new({1}, nx+(np*11), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
 local noteSldr13 = e.Vert_Slider:new({1}, nx+(np*12), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
--- Note weight slider table
+-- Note probability slider table
 local t_noteSliders = {noteSldr01, noteSldr02, noteSldr03, noteSldr04, noteSldr05, noteSldr06, noteSldr07,
 	noteSldr08, noteSldr09, noteSldr10, noteSldr11, noteSldr12, noteSldr13}
--- Note weight slider label (Textbox)
+-- Note probability slider label (Textbox) - right-click to reset all
 local probSldrText = e.Textbox:new({1}, nx, 210, 510, 20, e.col_grey5, "Note Weight Sliders", e.Arial, 16, e.col_grey7)
 -- Note octave doubler probability slider
 local octProbSldr = e.Vert_Slider:new({1}, nx+(np*13) + 10,  ny, nw, nh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.rndOctProb, 0, 0, 10, 1)
@@ -1058,22 +1035,19 @@ local noteOptionText = e.Textbox:new({1}, nx+(np*14)+20, 210, (nw*4), 20, e.col_
 -- Sequencer Layer
 --------------------------------------------------------------------------------
 -- sequence generate button
-local sequenceBtn = e.Button:new({2}, 25, 205, 110, 25, e.col_yellow, "Sequence", e.Arial, 16, e.col_grey8)
+local sequenceBtn = e.Button:new({2}, 25, 205, 110, 25, e.col_yellow, "Generate", e.Arial, 16, e.col_grey8)
 local sx, sy, sw, sh, sp = 160, 50, 30, 150, 40
 -- sequencer grid size radio selector
 local seqGridRad = e.Rad_Button:new({2,3}, sx, sy + 40, 30, 30, e.col_yellow, "", e.Arial, 16, e.col_grey8, 1, {"1/16", "1/8", "1/4"})
 local seqGridText = e.Textbox:new({2,3}, sx, 210, (sw*2)+20, 20, e.col_grey5, "Grid Size", e.Arial, 16, e.col_grey7)
 -- sequence grid probability sliders
---local seqSldr16t  = e.Vert_Slider:new({2}, sx+(sp*3),  sy, sw, sh, e.col_blue, "1/16t", e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
 local seqSldr16   = e.Vert_Slider:new({2}, sx+(sp*3),  sy, sw, sh, e.col_blue, "1/16",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
---local seqSldr8t   = e.Vert_Slider:new({2}, sx+(sp*5),  sy, sw, sh, e.col_blue, "1/8t",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
 local seqSldr8    = e.Vert_Slider:new({2}, sx+(sp*4),  sy, sw, sh, e.col_blue, "1/8",   e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
---local seqSldr4t   = e.Vert_Slider:new({2}, sx+(sp*7),  sy, sw, sh, e.col_blue, "1/4t",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
 local seqSldr4    = e.Vert_Slider:new({2}, sx+(sp*5),  sy, sw, sh, e.col_blue, "1/4",   e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
 local seqSldrRest = e.Vert_Slider:new({2}, sx+(sp*6),  sy, sw, sh, e.col_blue, "Rest",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
 -- sequence grid probability slider table
 local t_seqSliders = {seqSldr16, seqSldr8, seqSldr4, seqSldrRest}
--- sequence grid probability sliders label 
+-- sequence grid probability sliders label - right click to reset all (per grid size selection)
 local seqSldrText = e.Textbox:new({2}, sx + (sp * 3) - 10, 210, (sw * 4) + 50, 20, e.col_grey5, "Sequence Weight Sliders", e.Arial, 16, e.col_grey7)
 
 -- velocity accent slider (shared with Euclid layer)
@@ -1085,22 +1059,21 @@ local seqAccSldrText = e.Textbox:new({2,3}, sx + (sp * 10), 210, (sw * 2) + 10, 
 local seqLegProbSldr = e.Vert_Slider:new({2}, sx + (sp * 12), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.legatoProb, 0, 0, 10, 1)
 local seqLegSldrText = e.Textbox:new({2}, sx+(sp * 12), 210, sw, 20, e.col_grey5, "Leg", e.Arial, 16, e.col_grey7)
 -- Sequencer options
-local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 14) + 10, sy + 5, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0,0,0,0}, {"Generate", "1st Note Always", "Accent", "Legato", "Rnd Notes", "Repeat"})
+local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 14) + 10, sy + 5, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0,0,0}, {"Generate", "1st Note Always", "Accent", "Legato", "Rnd Notes"})
 -- ToDo Repeat
 
 --------------------------------------------------------------------------------
 -- Euclid Layer
 --------------------------------------------------------------------------------
 -- euclid generate button
-local euclidBtn = e.Button:new({3}, 25, 205, 110, 25, e.col_orange, "Euclidize", Arial, 16, e.col_grey8)
+local euclidBtn = e.Button:new({3}, 25, 205, 110, 25, e.col_orange, "Generate", Arial, 16, e.col_grey8)
 -- euclidean sliders
 local ex, ey, ew, eh, ep = 160, 50, 30, 150, 40
---local vslider01 = e.Vert_Slider:new({1}, x, y, w, h, col, "label", Font, 16, e.col_grey8, v1,v2, min, max, step)
 local euclidPulsesSldr = e.Vert_Slider:new({3}, ex+(ep*3), ey, ew, eh, e.col_blue, "Puls", Arial, 16, e.col_grey8, m.eucPulses, 0, 1, 24, 1)
 local euclidStepsSldr = e.Vert_Slider:new({3}, ex+(ep*4), ey, ew, eh, e.col_blue, "Step", Arial, 16, e.col_grey8, m.eucSteps, 0, 1, 24, 1)
 local euclidRotationSldr = e.Vert_Slider:new({3}, ex+(ep*5), ey, ew, eh, e.col_blue, "Rot",  Arial, 16, e.col_grey8, m.eucRot, 0, 0, 24, 1)
 local t_euclidSliders = {euclidPulsesSldr, euclidStepsSldr, euclidRotationSldr}
--- euclid slider label 
+-- euclid slider label - right click to reset all
 local txtEuclidLabel = e.Textbox:new({3}, ex + (ep * 3), 210, (ew * 3) + 20, 20, e.col_grey5, "Euclid Sliders", Arial, 16, e.col_grey7)
 -- Sequencer options
 local eucOptionsCb = e.Checkbox:new({3},  ex + (ep * 14) + 10, ey + 40, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0}, {"Generate", "Accent", "Rnd Notes"})
@@ -1158,9 +1131,9 @@ zoomDrop.onLClick = function() -- window scaling
 	m.zoomF = true
 end
 -- Layer 1 button
-layerBtn01.onLClick = function() -- randomizer
+layerBtn01.onLClick = function() -- randomiser
 	local debug = false
-	if debug or m.debug then ConMsg("\nlayerBtn01.onLClick() (note randomizer)") end
+	if debug or m.debug then ConMsg("\nlayerBtn01.onLClick() (note randomiser)") end
 	e.gActiveLayer = 1 
 	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_green)
 	winText.r, winText.g, winText.b, winText.a = table.unpack(e.col_green)
@@ -1249,14 +1222,13 @@ end
 redoBtn.onLClick = function() -- redo
 	local debug = false
 	if debug or m.debug then ConMsg("\nredoBtn.onLClick()") end
-	--m.notebuf = {}; m.notebuf.i = 0
 	if m.notebuf[m.notebuf.i + 1] ~= nil then
-		PrintNotes(m.notebuf[m.notebuf.i + 1])
+		--PrintNotes(m.notebuf[m.notebuf.i + 1])
 		m.notebuf.i = m.notebuf.i + 1
 		InsertNotes()
-		PrintNotes(m.notebuf[m.notebuf.i])
+		--PrintNotes(m.notebuf[m.notebuf.i])
 	else
-	if debug or m.debug then ConMsg("\nnothing to redo...") end  
+		if debug or m.debug then ConMsg("\nnothing to redo...") end  
 	end
 end
 -- Set default window options
@@ -1284,9 +1256,9 @@ function SetDefaultLayer()
 end
 
 --------------------------------------------------------------------------------
--- Note Randomizer
+-- Note Randomiser
 --------------------------------------------------------------------------------
--- Randomizer button
+-- Randomiser button
 randomBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nrandomBtn.onLClick()") end
@@ -1294,7 +1266,7 @@ randomBtn.onLClick = function()
 		GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
 		GenOctaveTable(m.octProbTable, octProbSldr)
 		GetNotesFromTake() 
-		RandomizeNotesPoly(m.noteProbTable)
+		RandomiseNotesPoly(m.noteProbTable)
 		-- set project ext state	
 		pExtState.noteSliders = {}
 		for k, v in pairs(t_noteSliders) do
@@ -1304,7 +1276,7 @@ randomBtn.onLClick = function()
 		pExtSaveStateF = true
 	end --m.activeTake
 end 
--- Randomizer options toggle logic
+-- Randomiser options toggle logic
 noteOptionsCb.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nnoteOptionsCb.onLClick()") end
@@ -1380,26 +1352,26 @@ function SetDefaultScaleOpts()
 	SetScale(m.curScaleName, m.scales, m.preNoteProbTable)	--set chosen scale
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable) -- set sliders labels to current scale notes
 end
--- Set default randomizer options
+-- Set default randomiser options
 function SetDefaultRndOptions()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultRndOptions()") end
-	-- if randomizer options were saved to project state, load them
+	-- if randomiser options were saved to project state, load them
 	if pExtState.noteOptionsCb then
 		m.rndAllNotesF =  pExtState.noteOptionsCb[1] == true and true or false 
 		m.rndFirstNoteF = pExtState.noteOptionsCb[2] == true and true or false
 		m.rndOctX2F =     pExtState.noteOptionsCb[3] == true and true or false
 		end
-	-- set randomizer options using defaults, or loaded project state
+	-- set randomiser options using defaults, or loaded project state
 	noteOptionsCb.val1[1] = (true and m.rndAllNotesF) and 1 or 0 -- all notes
 	noteOptionsCb.val1[2] = (true and m.rndFirstNoteF) and 1 or 0 -- first note root
 	noteOptionsCb.val1[3] = (true and m.rndOctX2F) and 1 or 0 -- octave doubler
 end
--- Set default randomizer sliders
+-- Set default randomiser sliders
 function SetDefaultRndSliders()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultRndSliders()") end
-	-- if randomizer sliders were saved to project state, load them
+	-- if randomiser sliders were saved to project state, load them
 	if pExtState.noteSliders then
 		for k, v in pairs(t_noteSliders) do
 			v.val1 = pExtState.noteSliders[k]
@@ -1460,7 +1432,7 @@ sequenceBtn.onLClick = function()
 			GetNotesFromTake()
 			GenSequence(m.seqProbTable, m.accProbTable, seqAccRSldr, m.legProbTable)
 			if m.seqRndNotesF then 
-				randomBtn.onLClick() -- call RandomizeNotes
+				randomBtn.onLClick() -- call RandomiseNotes
 			end
 		else -- not m.seqF
 			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
@@ -1468,7 +1440,7 @@ sequenceBtn.onLClick = function()
 			GetNotesFromTake() 
 			GenNoteAttributes(m.seqAccentF, m.accProbTable, seqAccRSldr, m.seqLegatoF, m.legProbTable)  
 			if m.seqRndNotesF then
-				randomBtn.onLClick() -- call RandomizeNotes
+				randomBtn.onLClick() -- call RandomiseNotes
 			end
 		end  -- m.seqF
 		-- set project ext state
@@ -1507,7 +1479,7 @@ seqOptionsCb.onLClick = function()
 	m.seqFirstNoteF = seqOptionsCb.val1[2] == 1 and true or false -- 1st Note Always
 	m.seqAccentF = 		seqOptionsCb.val1[3] == 1 and true or false -- Accent
 	m.seqLegatoF = 		seqOptionsCb.val1[4] == 1 and true or false -- Legato
-	m.seqRndNotesF = 	seqOptionsCb.val1[5] == 1 and true or false -- Randomize Notes
+	m.seqRndNotesF = 	seqOptionsCb.val1[5] == 1 and true or false -- Randomise Notes
 	m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Repeat
 	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
 	pExtSaveStateF = true
@@ -1715,9 +1687,9 @@ seqLegSldrText.onRClick = function()
 end
 
 --------------------------------------------------------------------------------
--- Euclidizer
+-- Euclidiser
 --------------------------------------------------------------------------------
--- Euclidizer button
+-- Euclidiser button
 euclidBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\neuclidBtn.onLClick()") end
@@ -1728,7 +1700,7 @@ euclidBtn.onLClick = function()
 			GetNotesFromTake()
 			GenBjorklund(euclidPulsesSldr, euclidStepsSldr, euclidRotationSldr, m.accProbTable, seqAccRSldr)
 			if m.eucRndNotesF then 
-				randomBtn.onLClick() -- call RandomizeNotes
+				randomBtn.onLClick() -- call RandomiseNotes
 			end
 		else -- not m.eucF
 			if debug or m.debug then ConMsg("m.eucF = " .. tostring(m.eucF)) end
@@ -1737,7 +1709,7 @@ euclidBtn.onLClick = function()
 			GenNoteAttributes(m.eucAccentF, m.accProbTable, seqAccRSldr, false, m.legProbTable)
 			if m.eucRndNotesF then 
 				if debug or m.debug then ConMsg("m.eucRndNotesF = " .. tostring(m.eucRndNotesF)) end
-				randomBtn.onLClick() -- call RandomizeNotes
+				randomBtn.onLClick() -- call RandomiseNotes
 			end    
 		end -- m.eucF
 		-- set project ext state		
@@ -1748,13 +1720,13 @@ euclidBtn.onLClick = function()
 		pExtSaveStateF = true
 	end -- m.activeTake
 end
--- Euclidizer options
+-- Euclidiser options
 eucOptionsCb.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\neucOptionsCb.onLClick()") end
 	m.eucF = 				 eucOptionsCb.val1[1] == 1 and true or false -- Generate
 	m.eucAccentF = 	 eucOptionsCb.val1[2] == 1 and true or false -- Accent
-	m.eucRndNotesF = eucOptionsCb.val1[3] == 1 and true or false -- Randomize notes
+	m.eucRndNotesF = eucOptionsCb.val1[3] == 1 and true or false -- Randomise notes
 	pExtState.eucOptionsCb = {m.eucF, m.eucAccentF, m.eucRndNotesF}
 	pExtSaveStateF = true
 	if debug or m.debug then PrintTable(eucOptionsCb.val1) end
@@ -1806,7 +1778,7 @@ function SetDefaultEucOptions()
 	-- set euclidean options using defaults, or loaded project state
 	eucOptionsCb.val1[1] = (true and m.eucF) and 1 or 0 -- generate
 	eucOptionsCb.val1[2] = (true and m.eucAccentF) and 1 or 0 -- accents
-	eucOptionsCb.val1[3] = (true and m.eucRndNotesF) and 1 or 0 -- randomize notes
+	eucOptionsCb.val1[3] = (true and m.eucRndNotesF) and 1 or 0 -- randomise notes
 end
 -- Set default euclid sliders
 function SetDefaultEucSliders()
@@ -1927,7 +1899,6 @@ function MainLoop()
 		 gfx.mouse_cap & 64 == 64 and gLastMouseCap & 64 == 0 then  -- M mouse
 		 gMouseOX, gMouseOY = gfx.mouse_x, gfx.mouse_y 
 	end
-	
 	-- Set modifier keys
 	Ctrl  = gfx.mouse_cap & 4  == 4
 	Shift = gfx.mouse_cap & 8  == 8
@@ -1951,7 +1922,7 @@ function MainLoop()
 	DrawGUI()
 	e.gScaleState = false	-- prevent zoom code from running every loop
 	
-	-- Save last mouse state
+	-- Save last mouse state since GUI was refreshed
 	gLastMouseCap = gfx.mouse_cap
 	gLastMouseX, gLastMouseY = gfx.mouse_x, gfx.mouse_y
 	gfx.mouse_wheel = 0 -- reset gfx.mouse_wheel
