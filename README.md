@@ -8,4 +8,4 @@ This repository is [ReaPack](https://reapack.com/) compatible - The import URL i
 
 ---
 *If you find any of this stuff useful, and would like to buy me a beer, the internets has the answer...*
-https://www.paypal.me/RobUrquhart
+[Beer Donation](https://www.paypal.me/RobUrquhart)
