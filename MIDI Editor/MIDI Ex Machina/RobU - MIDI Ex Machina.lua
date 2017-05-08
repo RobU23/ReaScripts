@@ -31,10 +31,9 @@
 @version 1.3
 @author RobU
 @changelog
-	v1.2
-	added monophonic sequence generator
-	added euclidean sequence generator (bjorklund algorithm) 
 	v1.3
+	added monophonic sequence generator
+	added euclidean sequence generator (bjorklund algorithm)
 	added all/selected notes option
 	added force first note to root option
 	added randomise octave option
