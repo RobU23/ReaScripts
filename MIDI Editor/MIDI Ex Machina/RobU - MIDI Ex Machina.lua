@@ -1314,6 +1314,10 @@ scaleDrop.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nscaleDrop.onLClick()") end
 	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
+	if m.rndPermuteF then 
+		noteOptionsCb.val1[1] = 0
+		m.rndAllNotesF  = false
+	end
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
 	-- set project ext state	
 	pExtState.curScaleName = scaleDrop.val2[scaleDrop.val1]
@@ -1957,7 +1961,6 @@ function MainLoop()
 					m.pHash = pHash
 				end -- m.pHash
 				-- don't allow any note options that might upset permute...
-				noteOptionsCb.val1[1] = 0; m.rndAllNotesF  = false
 				noteOptionsCb.val1[2] = 0; m.rndFirstNoteF = false
 				noteOptionsCb.val1[3] = 0; m.rndOctX2F     = false 
 			end -- scaleDrop   
