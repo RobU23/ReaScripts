@@ -756,7 +756,9 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 		else
 			noteStart = itemPos
 			noteLen = newNote * m.ppqn
-			noteEnd = noteStart + noteLen
+			-- check if noteLen exceeds the item length
+			if noteStart + noteLen > itemLength then noteLen = itemLength - noteStart end
+			noteEnd = noteStart + noteLen			
 			itemPos = itemPos + noteLen
 			if m.seqLegatoF then  -- handle legato flag
 				noteEnd = noteEnd + legProbTable[math.random(1, #legProbTable)]
