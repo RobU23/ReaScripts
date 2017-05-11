@@ -660,7 +660,7 @@ end
 function GetUniqueNote(tNotes, noteIdx, noteProbTable, octProbTable)
 	local debug = false
 	if debug and m.debug then ConMsg("GetUniqueNote()") end
-	newNote = m.root + noteProbTable[math.random(1,#noteProbTable)]	
+	newNote = m.root + noteProbTable[math.random(1, #noteProbTable)]	
 	if m.rndOctX2F and not m.rndPermuteF then
 		newNote = newNote + octProbTable[math.random(1, #octProbTable)]
 	end
@@ -697,7 +697,7 @@ function GetUniqueNote(tNotes, noteIdx, noteProbTable, octProbTable)
 	end -- if #m.dupes
 end
 --------------------------------------------------------------------------------
--- RandomiseNotesPoly(notebufs t1,t2, noteProbTable)
+-- RandomiseNotesPoly(noteProbTable)
 --------------------------------------------------------------------------------
 function RandomiseNotesPoly(noteProbTable)
 	local debug = false
@@ -1265,6 +1265,7 @@ randomBtn.onLClick = function()
 	if debug or m.debug then ConMsg("\nrandomBtn.onLClick()") end
 	if m.activeTake then
 		GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
+		if #m.noteProbTable == 0 then return end
 		GenOctaveTable(m.octProbTable, octProbSldr)
 		GetNotesFromTake() 
 		RandomiseNotesPoly(m.noteProbTable)
