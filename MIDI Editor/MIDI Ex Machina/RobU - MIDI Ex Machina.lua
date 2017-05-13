@@ -28,9 +28,12 @@
 @donation https://www.paypal.me/RobUrquhart
 @link Reaper http://reaper.fm
 @link Forum Thread http://reaper.fm
-@version 1.3
+@version 1.3.2
 @author RobU
 @changelog
+	v1.3.2
+	fixed bug all note sliders at zero causes crash
+	added sequencer note shifter (left / right by grid size)
 	v1.3
 	added monophonic sequence generator
 	added euclidean sequence generator (bjorklund algorithm)
@@ -72,8 +75,8 @@ m = {} -- all ex machina data
 -- user changeable defaults are marked with "(option)"
 m.debug = false
 -- window
-m.win_title = "RobU : MIDI Ex Machina - v1.3"; m.win_dockstate = 0
-m.win_x = 10; m.win_y = 10; m.win_w = 900; m.win_h = 300 -- window dimensions
+m.win_title = "RobU : MIDI Ex Machina - v1.3.2"; m.win_dockstate = 0
+m.win_x = 10; m.win_y = 10; m.win_w = 900; m.win_h = 280 -- window dimensions
 m.win_bg = {0, 0, 0} -- background colour
 m.def_zoom = 4 -- 100% (option)
 -- zoom values are 1=70, 2=80, 3=90, 4=100, 5=110%, 6=120, 7=140, 8=160, 9=180, 10=200
@@ -109,6 +112,7 @@ m.legatoProb = 3 -- default value (option - min 0, max 10)
 m.seqGrid16 = {8, 8, 0, 4} -- sane default sequencer note length slider values
 m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
 m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
+m.seqShift = 0; m.seqShiftMin = -16; m.seqShiftMax = 16 -- shift notes left-right from sequencer
 m.repeatStart, m.repeatEnd, m.repeatLength, m.repeatTimes = 0, 0, 0, 0 -- repeat values (currently unused)
 
 -- euclidean generator
@@ -181,13 +185,17 @@ local function BitCheck(bitField, bitIdx)
   return (bitField & (1 << bitIdx) ~= 0) and true or false
 end
 --------------------------------------------------------------------------------
+-- GetSign(n) -return -1 or 1
+--------------------------------------------------------------------------------
+function GetSign(n)
+  return n > 0 and 1 or n < 0 and -1 or 1
+end
+--------------------------------------------------------------------------------
 -- Wrap(n, max) -return n wrapped between 'n' and 'max'
 --------------------------------------------------------------------------------
 local function Wrap (n, max)
 	n = n % max
-	if (n < 1) then
-		n = n + max
-	end
+	if (n < 1) then n = n + max end
 	return n
 end
 --------------------------------------------------------------------------------
@@ -873,7 +881,7 @@ function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 	end -- while t1[i]
 	if debug and m.debug then PrintNotes(t2) end
 	PurgeNoteBuf()
-	SetNotes()
+	InsertNotes()
 end
 --------------------------------------------------------------------------------
 -- SetNotes - arg notebuf t1; set notes in the active take
@@ -899,6 +907,44 @@ end
 -- InsertNotes(note_buffer) - insert notes in the active take
 --------------------------------------------------------------------------------
 function InsertNotes()
+	local debug = false
+	if debug or m.debug then ConMsg("\nInsertNotes()") end
+	DeleteNotes()
+	local i = 1
+	if m.activeTake then
+		local gridSize = m.reaGrid * m.ppqn
+		local itemLength = GetItemLength()	
+		local noteShift = m.seqShift * gridSize
+		local t1 = GetNoteBuf()	
+		local t2 = {} -- for note shifting
+		CopyTable(t1, t2)
+		for k, v in pairs(t2) do -- do note shifting
+			v[3] = v[3] + noteShift
+			v[4] = v[4] + noteShift			
+			if v[3] < 0 then
+				v[3] = itemLength + v[3]
+				v[4] = itemLength + v[4]	
+					if v[4] > itemLength then v[4] = itemLength + m.legato end
+			elseif v[3] >= itemLength then
+				v[3] = v[3] - itemLength
+				v[4] = v[4] - itemLength				
+			end
+		end
+		while t2[i] do
+			reaper.MIDI_InsertNote(m.activeTake, t2[i][1], t2[i][2], t2[i][3], t2[i][4], t2[i][6], t2[i][7], t2[i][8], false)
+			--1=selected, 2=muted, 3=startppq, 4=endppq, 5=len, 6=chan, 7=pitch, 8=vel, noSort)		
+			i = i + 1
+		end -- while t2[i]
+		reaper.MIDI_Sort(m.activeTake)
+		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+	else
+		if debug or m.debug then ConMsg("No Active Take") end
+	end -- m.activeTake
+end
+--------------------------------------------------------------------------------
+-- InsertNotes(note_buffer) - insert notes in the active take
+--------------------------------------------------------------------------------
+function InsertNotesOld()
 	local debug = false
 	if debug or m.debug then ConMsg("InsertNotes()") end
 	DeleteNotes()
@@ -1049,19 +1095,25 @@ local seqSldrRest = e.Vert_Slider:new({2}, sx+(sp*6),  sy, sw, sh, e.col_blue, "
 -- sequence grid probability slider table
 local t_seqSliders = {seqSldr16, seqSldr8, seqSldr4, seqSldrRest}
 -- sequence grid probability sliders label - right click to reset all (per grid size selection)
-local seqSldrText = e.Textbox:new({2}, sx + (sp * 3) - 10, 210, (sw * 4) + 50, 20, e.col_grey5, "Sequence Weight Sliders", e.Arial, 16, e.col_grey7)
+local seqSldrText = e.Textbox:new({2}, sx + (sp * 3), 210, (sw * 5), 20, e.col_grey5, "Size Weight Sliders", e.Arial, 16, e.col_grey7)
 
 -- velocity accent slider (shared with Euclid layer)
-local seqAccRSldr  = e.V_Rng_Slider:new({2,3}, sx + (sp * 10), sy, sw, sh, e.col_blue, "", e.Arial, 16, e.col_grey8, m.accentLow, m.accentHigh, 0, 127, 1)
-local seqAccProbSldr = e.Vert_Slider:new({2,3}, sx + (sp * 11),  sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.accentProb, 0, 0, 10, 1)
-local seqAccSldrText = e.Textbox:new({2,3}, sx + (sp * 10), 210, (sw * 2) + 10, 20, e.col_grey5, "Vel  |  Acc", e.Arial, 16, e.col_grey7)
+local seqAccRSldr  = e.V_Rng_Slider:new({2,3},  sx + (sp * 8) - (sw / 2), sy, sw, sh, e.col_blue, "", e.Arial, 16, e.col_grey8, m.accentLow, m.accentHigh, 0, 127, 1)
+local seqAccProbSldr = e.Vert_Slider:new({2,3}, sx + (sp * 9) - (sw / 2), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.accentProb, 0, 0, 10, 1)
+local seqAccSldrText = e.Textbox:new({2,3},     sx + (sp * 8) - (sw / 2), 210, (sw * 2) + 10, 20, e.col_grey5, "Vel  |  Acc", e.Arial, 16, e.col_grey7)
 
 -- legato slider
-local seqLegProbSldr = e.Vert_Slider:new({2}, sx + (sp * 12), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.legatoProb, 0, 0, 10, 1)
-local seqLegSldrText = e.Textbox:new({2}, sx+(sp * 12), 210, sw, 20, e.col_grey5, "Leg", e.Arial, 16, e.col_grey7)
+local seqLegProbSldr = e.Vert_Slider:new({2}, sx + (sp * 10) - (sw / 2), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.legatoProb, 0, 0, 10, 1)
+local seqLegSldrText = e.Textbox:new({2},     sx + (sp * 10) - (sw / 2), 210, sw, 20, e.col_grey5, "Leg", e.Arial, 16, e.col_grey7)
+
+-- sequence shift buttons
+local seqShiftLBtn = e.Button:new({2},  sx + (sp * 11) + 10, sy + sh - 25, sw, 25, e.col_blue, "<<", e.Arial, 16, e.col_grey8)
+local seqShiftRBtn = e.Button:new({2},  sx + (sp * 13) - 10, sy + sh - 25, sw, 25, e.col_blue, ">>", e.Arial, 16, e.col_grey8)
+local seqShiftVal  = e.Textbox:new({2}, sx + (sp * 12),      sy + sh - 25, sw, 25, e.col_grey5, tostring(m.seqShift), e.Arial, 16, e.col_grey7)
+local seqShiftText = e.Textbox:new({2}, sx + (sp * 11) + 10, 210, sw * 3, 20, e.col_grey5, "Shift Notes", e.Arial, 16, e.col_grey7)
+
 -- Sequencer options
 local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 14) + 10, sy + 5, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0,0,0}, {"Generate", "1st Note Always", "Accent", "Legato", "Rnd Notes"})
--- ToDo Repeat
 
 --------------------------------------------------------------------------------
 -- Euclid Layer
@@ -1092,11 +1144,11 @@ local msgText = e.Textbox:new({9}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.w
 --------------------------------------------------------------------------------
 -- Shared Element Tables
 --------------------------------------------------------------------------------
-local t_Buttons = {randomBtn, sequenceBtn, euclidBtn}
+local t_Buttons = {randomBtn, sequenceBtn, seqShiftLBtn, seqShiftRBtn, euclidBtn}
 local t_Checkboxes = {noteOptionsCb, seqOptionsCb, eucOptionsCb}
 local t_RadButtons = {seqGridRad}
 local t_RSliders = {octProbSldr, seqAccRSldr, seqAccProbSldr, seqLegProbSldr}
-local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqAccSldrText, seqLegSldrText, txtEuclidLabel, optText, msgText}
+local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqShiftVal, seqShiftText, seqAccSldrText, seqLegSldrText, txtEuclidLabel, optText, msgText}
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -1264,6 +1316,8 @@ randomBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nrandomBtn.onLClick()") end
 	if m.activeTake then
+		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift
+		seqShiftVal.label = tostring(m.seqShift)
 		GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
 		if #m.noteProbTable == 0 then return end
 		GenOctaveTable(m.octProbTable, octProbSldr)
@@ -1326,6 +1380,7 @@ scaleDrop.onLClick = function()
 	pExtState.curScaleName = scaleDrop.val2[scaleDrop.val1]
 	pExtSaveStateF = true
 end	
+
 -- Set default scale options
 function SetDefaultScaleOpts()
 	local debug = false
@@ -1393,6 +1448,7 @@ function SetDefaultRndSliders()
 		octProbSldr.val1 = m.rndOctProb
 	end
 end
+
 -- Reset note probability sliders
 probSldrText.onRClick = function()
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
@@ -1430,6 +1486,8 @@ sequenceBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nsequenceBtn.onLClick()") end
 	if m.activeTake then 
+			m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
+			seqShiftVal.label = tostring(m.seqShift)	
 		if m.seqF then
 			SetSeqGridSizes(t_seqSliders)
 			GenProbTable(m.preSeqProbTable, t_seqSliders, m.seqProbTable)
@@ -1534,8 +1592,43 @@ seqGridRad.onLClick = function() -- change grid size
 			end -- pExtState.seqGrid4
 		end -- seGridRad
 
+		-- reset the shift state
+		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
+		seqShiftVal.label = tostring(m.seqShift)
+		GetNotesFromTake() -- force an undo point on grid change
+		--InsertNotes()
+
+		pExtSaveStateF = true
+		
 	end -- m.activeTake
 end
+-- Sequencer shift left
+seqShiftLBtn.onLClick = function()
+	local gridSize = m.reaGrid * m.ppqn
+	local itemLength = GetItemLength()
+	m.seqShiftMin = -(math.floor(itemLength / gridSize)-1)
+	if m.seqShift <= m.seqShiftMin then
+		m.seqShift = 0
+	else
+		m.seqShift = m.seqShift - 1
+	end
+	seqShiftVal.label = tostring(m.seqShift)
+	InsertNotes()
+end
+-- Sequencer shift right
+seqShiftRBtn.onLClick = function()
+	local gridSize = m.reaGrid * m.ppqn
+	local itemLength = GetItemLength()
+	m.seqShiftMax = math.floor(itemLength / gridSize) - 1
+	if m.seqShift >= m.seqShiftMax then 
+		m.seqShift = 0
+	else
+		m.seqShift = m.seqShift + 1
+	end	
+	seqShiftVal.label = tostring(m.seqShift)
+	InsertNotes()
+end
+
 -- Set sequencer default options
 function SetDefaultSeqOptions()
 	local debug = false
@@ -1634,6 +1727,16 @@ function SetDefaultSeqGridSliders()
 		end
 		
 end
+-- Set default sequencer shift state
+function SetDefaultSeqShift()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultSeqShift()") end
+		m.seqShift = 0
+		m.seqShiftMin = 0
+		m.seqShiftMax = 0
+		seqShiftVal.label = tostring(m.seqShift)
+end
+
 -- Reset sequencer grid sliders
 seqSldrText.onRClick = function()
 	local debug = false
@@ -1691,6 +1794,19 @@ seqLegSldrText.onRClick = function()
 		pExtSaveStateF = true
 	end -- result
 end
+-- Reset sequencer shift
+seqShiftText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\nseqShiftText.onRClick") end
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Note Shift")
+	if result == 1 then
+		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
+		seqShiftVal.label = tostring(m.seqShift)
+		InsertNotes()
+	end -- result
+end	
+
 
 --------------------------------------------------------------------------------
 -- Euclidiser
@@ -1771,6 +1887,7 @@ euclidRotationSldr.onMove = function()
 		euclidRotationSldr.max = euclidRotationSldr.val1
 	end
 end
+
 -- Set default euclid options
 function SetDefaultEucOptions()
 	local debug = false
@@ -1801,6 +1918,7 @@ function SetDefaultEucSliders()
 		euclidRotationSldr.val1 = m.eucRot
 	end -- load pExtState
 end
+
 -- Reset euclidean sliders
 txtEuclidLabel.onRClick = function()
 	local debug = false
@@ -1875,7 +1993,8 @@ function InitMidiExMachina()
 	SetDefaultWindowOpts();	SetDefaultLayer() 
 	SetDefaultScaleOpts()
 	SetDefaultRndOptions(); SetDefaultRndSliders()
-	SetDefaultSeqOptions(); SetDefaultSeqGridSliders(); SetDefaultAccLegSliders()
+	SetDefaultSeqOptions(); SetDefaultSeqShift()
+	SetDefaultSeqGridSliders(); SetDefaultAccLegSliders()
 	SetDefaultEucOptions(); SetDefaultEucSliders()
 
 	GetItemLength()
