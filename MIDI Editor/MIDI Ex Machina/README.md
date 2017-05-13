@@ -12,6 +12,7 @@ Features
   * Note length probability sliders
   * Accent level and probability sliders
   * Legato probability slider
+  * Shift notes left or right by grid size
   * Options toggle (seq, acc, leg, rnd, etc..)
 * Euclidean sequencer
   * Pulse, steps, and rotation euclidean sliders
