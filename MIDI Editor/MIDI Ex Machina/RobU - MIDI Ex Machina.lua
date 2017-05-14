@@ -904,9 +904,75 @@ function SetNotes()
 	end -- m.activeTake
 end
 --------------------------------------------------------------------------------
--- InsertNotes(note_buffer) - insert notes in the active take
+-- InsertNotes() - insert current note buffer in the active take
 --------------------------------------------------------------------------------
 function InsertNotes()
+	local debug = false
+	if debug or m.debug then ConMsg("\nInsertNotes()") end
+	DeleteNotes()
+	local i = 1
+	if m.activeTake then
+		local gridSize = m.reaGrid * m.ppqn
+		local itemLength = GetItemLength()	
+		local noteShift = m.seqShift * gridSize
+		local t1 = GetNoteBuf()	
+		local t2 = {} -- temp for note shifting (no undo)
+		CopyTable(t1, t2)
+		
+		for k, v in pairs(t2) do -- start note shifting
+			v[3] = v[3] + noteShift
+			v[4] = v[4] + noteShift			
+			if v[3] < 0 then
+				v[3] = itemLength + v[3]
+				v[4] = itemLength + v[4]	
+					if v[4] > itemLength then v[4] = itemLength + m.legato end
+			elseif v[3] >= itemLength then
+				v[3] = v[3] - itemLength
+				v[4] = v[4] - itemLength				
+			end
+		end -- stop note shifting
+		
+		-- start repeat
+		m.repeatTimes = 2; m.repeatLength = 4 --(in grid divisions)
+		local repeatEnd = gridSize * m.repeatLength
+		local noteSize = 0
+		local gridRep = 1
+		local gridPos = 0
+		local noteIdx = 1
+		
+		ConMsg("\nStart repeat...")
+		while m.repeatTimes > 0 do
+			ConMsg("m.repeatTimes = " .. tostring(m.repeatTimes))
+			
+				ConMsg("gridPos = " .. tostring(gridPos))	
+				gridPos = gridPos + gridSize
+
+			m.repeatTimes = m.repeatTimes - 1
+		end -- m.repeatTimes
+		ConMsg("m.repeatTimes = " .. tostring(m.repeatTimes))	
+		ConMsg("gridPos = " .. tostring(gridPos))
+		
+		ConMsg("\nStart remainder...")		
+		for gP = gridPos, itemLength, gridSize do
+			ConMsg("gridPos = " .. tostring(gP))
+		end	
+		ConMsg("itemLength = " .. tostring(itemLength))
+		-- insert note buffer to the active take
+		--while t2[i] do
+			--reaper.MIDI_InsertNote(m.activeTake, t2[i][1], t2[i][2], t2[i][3], t2[i][4], t2[i][6], t2[i][7], t2[i][8], false)
+			--1=selected, 2=muted, 3=startppq, 4=endppq, 5=len, 6=chan, 7=pitch, 8=vel, noSort)		
+			--i = i + 1
+		--end -- while t2[i]
+		reaper.MIDI_Sort(m.activeTake)
+		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+	else
+		if debug or m.debug then ConMsg("No Active Take") end
+	end -- m.activeTake
+end
+--------------------------------------------------------------------------------
+-- InsertNotesWithShift(note_buffer) - insert notes in the active take
+--------------------------------------------------------------------------------
+function InsertNotesWithShift()
 	local debug = false
 	if debug or m.debug then ConMsg("\nInsertNotes()") end
 	DeleteNotes()
@@ -942,9 +1008,9 @@ function InsertNotes()
 	end -- m.activeTake
 end
 --------------------------------------------------------------------------------
--- InsertNotes(note_buffer) - insert notes in the active take
+-- InsertNotesOrig(note_buffer) - insert notes in the active take
 --------------------------------------------------------------------------------
-function InsertNotesOld()
+function InsertNotesOrig()
 	local debug = false
 	if debug or m.debug then ConMsg("InsertNotes()") end
 	DeleteNotes()
