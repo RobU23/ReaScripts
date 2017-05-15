@@ -113,7 +113,8 @@ m.seqGrid16 = {8, 8, 0, 4} -- sane default sequencer note length slider values
 m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
 m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
 m.seqShift = 0; m.seqShiftMin = -16; m.seqShiftMax = 16 -- shift notes left-right from sequencer
-m.repeatStart, m.repeatEnd, m.repeatLength, m.repeatTimes = 0, 0, 0, 0 -- repeat values (currently unused)
+m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN  = 0, 0, 0, 0 -- repeat values
+m.repNumT, m.repLenGridT = {}, {} -- repeat value tables
 
 -- euclidean generator
 m.eucF = true	-- generate euclid (option)
@@ -791,8 +792,8 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 		end -- newNote
 	end -- itemPos < itemLength
 	if debug and m.debug then PrintNotes(t) end
-	PurgeNoteBuf()  
-	InsertNotes()
+	PurgeNoteBuf()
+	if not m.seqRndNotesF then InsertNotes() end
 end
 --------------------------------------------------------------------------------
 -- GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
@@ -933,30 +934,36 @@ function InsertNotes()
 		end -- stop note shifting
 		
 		-- start repeat
-		m.repeatTimes = 2; m.repeatLength = 4 --(in grid divisions)
-		local repeatEnd = gridSize * m.repeatLength
-		local noteSize = 0
-		local gridRep = 1
-		local gridPos = 0
-		local noteIdx = 1
+--m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN
+		t3 = {} -- temp for repeating
+		local repLenPPQN = m.repLenGrid * gridSize
+		local repStart = 0
+		local repEnd = repLenPPQN
+		local repLoop = m.repNum
+		local writePos = repStart
 		
 		ConMsg("\nStart repeat...")
-		while m.repeatTimes > 0 do
-			ConMsg("m.repeatTimes = " .. tostring(m.repeatTimes))
-			
-				ConMsg("gridPos = " .. tostring(gridPos))	
-				gridPos = gridPos + gridSize
+		while repLoop > 0 do
+			ConMsg("\nrepLoop = " .. tostring(repLoop))
+			ConMsg("repStart = " .. tostring(repStart))
+			ConMsg("repEnd =   " .. tostring(repEnd))
+			ConMsg("writePos = " .. tostring(writePos))
+			for k, v in pairs(t2) do
+				if v[3] >= repStart and v[3] < repEnd then
+					if v[4] > repEnd then v[4] = repEnd end
+					t3[k] = {}
+					ConMsg("note data")
+					ConMsg("a - noteIdx = " .. tostring(k) .. " - Start = " .. tostring(v[3]) .. " - End = " .. tostring(v[4]))
+					ConMsg("b - noteIdx = " .. tostring(k) .. " - Start = " .. tostring(v[3] + writePos) .. " - End = " .. tostring(v[4] + writePos))
+					t3[k][1] = v[1]; t3[k][2] = v[2]; t3[k][5] = v[5]; t3[k][6] = v[6]; t3[k][7] = v[7]; t3[k][8] = v[8];
+					t3[k][3] = v[3] + writePos; t3[k][4] = v[4] + writePos
+					reaper.MIDI_InsertNote(m.activeTake, t3[k][1], t3[k][2], t3[k][3], t3[k][4], t3[k][6], t3[k][7], t3[k][8], false)
+				end -- if v[3]
+			end -- for k, v t2
+			repLoop = repLoop - 1
+			writePos = writePos + repLenPPQN
+		end
 
-			m.repeatTimes = m.repeatTimes - 1
-		end -- m.repeatTimes
-		ConMsg("m.repeatTimes = " .. tostring(m.repeatTimes))	
-		ConMsg("gridPos = " .. tostring(gridPos))
-		
-		ConMsg("\nStart remainder...")		
-		for gP = gridPos, itemLength, gridSize do
-			ConMsg("gridPos = " .. tostring(gP))
-		end	
-		ConMsg("itemLength = " .. tostring(itemLength))
 		-- insert note buffer to the active take
 		--while t2[i] do
 			--reaper.MIDI_InsertNote(m.activeTake, t2[i][1], t2[i][2], t2[i][3], t2[i][4], t2[i][6], t2[i][7], t2[i][8], false)
@@ -1172,6 +1179,11 @@ local seqAccSldrText = e.Textbox:new({2,3},     sx + (sp * 8) - (sw / 2), 210, (
 local seqLegProbSldr = e.Vert_Slider:new({2}, sx + (sp * 10) - (sw / 2), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.legatoProb, 0, 0, 10, 1)
 local seqLegSldrText = e.Textbox:new({2},     sx + (sp * 10) - (sw / 2), 210, sw, 20, e.col_grey5, "Leg", e.Arial, 16, e.col_grey7)
 
+-- repeat dropboxes
+local seqRepLenDrop = e.Droplist:new({2}, sx + (sp * 11) + 10, sy + 15, sw * 3, 20, e.col_blue, "Length", e.Arial, 16, e.col_grey8, m.repLenGrid, m.repLenGridT)
+local seqRepNumDrop = e.Droplist:new({2}, sx + (sp * 11) + 10, sy + 60, sw * 3, 20, e.col_blue, "Amount", e.Arial, 16, e.col_grey8, m.repNum, m.repNumT)
+local seqRepText = e.Textbox:new({2},     sx + (sp * 11) + 10, sy + 90, sw * 3, 20, e.col_grey5, "Repeat", e.Arial, 16, e.col_grey7)
+
 -- sequence shift buttons
 local seqShiftLBtn = e.Button:new({2},  sx + (sp * 11) + 10, sy + sh - 25, sw, 25, e.col_blue, "<<", e.Arial, 16, e.col_grey8)
 local seqShiftRBtn = e.Button:new({2},  sx + (sp * 13) - 10, sy + sh - 25, sw, 25, e.col_blue, ">>", e.Arial, 16, e.col_grey8)
@@ -1212,9 +1224,10 @@ local msgText = e.Textbox:new({9}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.w
 --------------------------------------------------------------------------------
 local t_Buttons = {randomBtn, sequenceBtn, seqShiftLBtn, seqShiftRBtn, euclidBtn}
 local t_Checkboxes = {noteOptionsCb, seqOptionsCb, eucOptionsCb}
+local t_Droplists2 = {seqRepLenDrop, seqRepNumDrop}
 local t_RadButtons = {seqGridRad}
 local t_RSliders = {octProbSldr, seqAccRSldr, seqAccProbSldr, seqLegProbSldr}
-local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqShiftVal, seqShiftText, seqAccSldrText, seqLegSldrText, txtEuclidLabel, optText, msgText}
+local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqShiftVal, seqRepText, seqShiftText, seqAccSldrText, seqLegSldrText, txtEuclidLabel, optText, msgText}
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -1802,6 +1815,25 @@ function SetDefaultSeqShift()
 		m.seqShiftMax = 0
 		seqShiftVal.label = tostring(m.seqShift)
 end
+-- Set default sequencer repeat state
+function SetDefaultSeqRepeat()
+	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
+	local gridSize = m.reaGrid * m.ppqn
+	local itemLength = GetItemLength()
+	m.repNum = 1; m.repLenGrid = 1
+	seqRepNumDrop.val1 = m.repNum
+	seqRepLenDrop.val1 = m.repLenGrid
+	m.repMax = math.floor(itemLength / gridSize)	
+	for i = 1, m.repMax do
+		seqRepNumDrop.val2[i] = i
+		seqRepLenDrop.val2[i] = i
+	end
+	--[[
+m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN
+seqRepLenDrop, m.repLenGridT)
+seqRepNumDrop, m.repNumT)
+--]]
+end
 
 -- Reset sequencer grid sliders
 seqSldrText.onRClick = function()
@@ -2009,7 +2041,8 @@ function DrawGUI()
 	for key, check in pairs(t_Checkboxes) do check:draw() end
 	for key, radio in pairs(t_RadButtons) do radio:draw() end	
 	for key, btn in pairs(t_Buttons) do btn:draw() end
-	for key, dlist in pairs(t_Droplists) do dlist:draw() end 
+	for key, dlist in pairs(t_Droplists) do dlist:draw() end
+	for key, dlist2 in pairs(t_Droplists2) do dlist2:draw() end 
 	--for key, knb in pairs(t_Knobs) do knb:draw() end
 	for key, rsliders in pairs(t_RSliders) do rsliders:draw() end
 	for key, nsldrs in pairs(t_noteSliders) do nsldrs:draw() end
@@ -2061,6 +2094,7 @@ function InitMidiExMachina()
 	SetDefaultRndOptions(); SetDefaultRndSliders()
 	SetDefaultSeqOptions(); SetDefaultSeqShift()
 	SetDefaultSeqGridSliders(); SetDefaultAccLegSliders()
+	SetDefaultSeqRepeat()
 	SetDefaultEucOptions(); SetDefaultEucSliders()
 
 	GetItemLength()
