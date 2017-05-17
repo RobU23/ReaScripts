@@ -113,8 +113,11 @@ m.seqGrid16 = {8, 8, 0, 4} -- sane default sequencer note length slider values
 m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
 m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
 m.seqShift = 0; m.seqShiftMin = -16; m.seqShiftMax = 16 -- shift notes left-right from sequencer
+m.loopStartG, m.loopLenG, m.loopNum, m.loopMaxRep = 0, 0, 0, 0 -- repeat values for GUI
+m.t_loopStart, m.t_loopRep, m.t_loopLenG = {}, {}, {} -- repeat value tables
+
 m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN  = 0, 0, 0, 0 -- repeat values
-m.repNumT, m.repLenGridT = {}, {} -- repeat value tables
+
 
 -- euclidean generator
 m.eucF = true	-- generate euclid (option)
@@ -139,8 +142,8 @@ m.scales = {
 	{0, 2, 3, 5, 7, 8, 10, 12, name = "Aeolian / Minor"},
 	{0, 1, 3, 5, 6, 8, 10, 12, name = "Locrian"},
 	{0, 3, 5, 6, 7, 10, 12,name = "Blues"},
-	{0, 2, 4, 7, 9, 12,name = "Pentatonic Major"},
-	{0, 3, 5, 7, 10, 12,name = "Pentatonic Minor"},
+	{0, 2, 4, 7, 9, 12,name = "Pentatonic Maj"},
+	{0, 3, 5, 7, 10, 12,name = "Pentatonic Min"},
 	{name = "Permute"}
 }  
 -- a list of scales available to the note randomiser, more can be added manually if required
@@ -709,12 +712,13 @@ end
 -- RandomiseNotesPoly(noteProbTable)
 --------------------------------------------------------------------------------
 function RandomiseNotesPoly(noteProbTable)
-	local debug = false
+	local debug = true
 	if debug or m.debug then ConMsg("RandomiseNotesPoly()") end
 	m.dupes.i = 1
 	local  i = 1
 	local t1, t2 = GetNoteBuf(), NewNoteBuf()
 	CopyTable(t1, t2)
+	if debug or m.debug then PrintNotes(t1) end	
 	while t2[i] do
 		if t2[i][1] == true or m.rndAllNotesF then -- if selected, or all notes flag is true
 			if i == 1 and m.rndFirstNoteF then -- if selected, the first not is always root of scale
@@ -726,6 +730,7 @@ function RandomiseNotesPoly(noteProbTable)
 		i = i + 1
 	end -- while t1[i]
 	PurgeNoteBuf()
+	if debug or m.debug then PrintNotes(t2) end
 	InsertNotes()
 	if m.rndPermuteF and m.activeTake then 
 		__, pHash = reaper.MIDI_GetHash(m.activeTake, false, 0)
@@ -736,7 +741,7 @@ end
 -- GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 --------------------------------------------------------------------------------
 function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
-	local debug = false
+	local debug = true
 	if debug or m.debug then ConMsg("GenSequence()") end
 	local t, t2 = NewNoteBuf(), GetNoteBuf()
 	CopyTable(t2, t)
@@ -791,9 +796,10 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 			t[noteCount][8] = noteVel             -- velocity
 		end -- newNote
 	end -- itemPos < itemLength
-	if debug and m.debug then PrintNotes(t) end
+	if debug or m.debug then PrintNotes(t) end
 	PurgeNoteBuf()
 	if not m.seqRndNotesF then InsertNotes() end
+	--InsertNotes()
 end
 --------------------------------------------------------------------------------
 -- GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
@@ -848,7 +854,7 @@ function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 		idx = Wrap(idx, step)
 	end
 	PurgeNoteBuf()
-	InsertNotes()
+	if not m.eucRndNotesF then InsertNotes() end
 end
 --------------------------------------------------------------------------------
 -- GenNoteAttributes(accF, accProb, accVal, legF, legVal) -- accent, legato only
@@ -908,70 +914,93 @@ end
 -- InsertNotes() - insert current note buffer in the active take
 --------------------------------------------------------------------------------
 function InsertNotes()
-	local debug = false
+	local debug = true
 	if debug or m.debug then ConMsg("\nInsertNotes()") end
-	DeleteNotes()
 	local i = 1
 	if m.activeTake then
 		local gridSize = m.reaGrid * m.ppqn
-		local itemLength = GetItemLength()	
+		local itemLenP = GetItemLength()	
 		local noteShift = m.seqShift * gridSize
 		local t1 = GetNoteBuf()	
-		local t2 = {} -- temp for note shifting (no undo)
-		CopyTable(t1, t2)
-		
-		for k, v in pairs(t2) do -- start note shifting
+		PrintNotes(t1)		
+		-- note shifter
+		local t2 = {} -- temp for note shifter (no undo)
+		CopyTable(t1, t2)		
+		for k, v in pairs(t2) do
 			v[3] = v[3] + noteShift
 			v[4] = v[4] + noteShift			
 			if v[3] < 0 then
-				v[3] = itemLength + v[3]
-				v[4] = itemLength + v[4]	
-					if v[4] > itemLength then v[4] = itemLength + m.legato end
-			elseif v[3] >= itemLength then
-				v[3] = v[3] - itemLength
-				v[4] = v[4] - itemLength				
+				v[3] = itemLenP + v[3]
+				v[4] = itemLenP + v[4]	
+					if v[4] > itemLenP then v[4] = itemLenP + m.legato end
+			elseif v[3] >= itemLenP then
+				v[3] = v[3] - itemLenP
+				v[4] = v[4] - itemLenP				
 			end
-		end -- stop note shifting
-		
-		-- start repeat
---m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN
-		t3 = {} -- temp for repeating
-		local repLenPPQN = m.repLenGrid * gridSize
-		local repStart = 0
-		local repEnd = repLenPPQN
-		local repLoop = m.repNum
-		local writePos = repStart
-		
-		ConMsg("\nStart repeat...")
-		while repLoop > 0 do
-			ConMsg("\nrepLoop = " .. tostring(repLoop))
-			ConMsg("repStart = " .. tostring(repStart))
-			ConMsg("repEnd =   " .. tostring(repEnd))
-			ConMsg("writePos = " .. tostring(writePos))
-			for k, v in pairs(t2) do
-				if v[3] >= repStart and v[3] < repEnd then
-					if v[4] > repEnd then v[4] = repEnd end
-					t3[k] = {}
-					ConMsg("note data")
-					ConMsg("a - noteIdx = " .. tostring(k) .. " - Start = " .. tostring(v[3]) .. " - End = " .. tostring(v[4]))
-					ConMsg("b - noteIdx = " .. tostring(k) .. " - Start = " .. tostring(v[3] + writePos) .. " - End = " .. tostring(v[4] + writePos))
-					t3[k][1] = v[1]; t3[k][2] = v[2]; t3[k][5] = v[5]; t3[k][6] = v[6]; t3[k][7] = v[7]; t3[k][8] = v[8];
-					t3[k][3] = v[3] + writePos; t3[k][4] = v[4] + writePos
-					reaper.MIDI_InsertNote(m.activeTake, t3[k][1], t3[k][2], t3[k][3], t3[k][4], t3[k][6], t3[k][7], t3[k][8], false)
-				end -- if v[3]
-			end -- for k, v t2
-			repLoop = repLoop - 1
-			writePos = writePos + repLenPPQN
-		end
+		end -- end note shifter
 
-		-- insert note buffer to the active take
-		--while t2[i] do
-			--reaper.MIDI_InsertNote(m.activeTake, t2[i][1], t2[i][2], t2[i][3], t2[i][4], t2[i][6], t2[i][7], t2[i][8], false)
-			--1=selected, 2=muted, 3=startppq, 4=endppq, 5=len, 6=chan, 7=pitch, 8=vel, noSort)		
-			--i = i + 1
-		--end -- while t2[i]
-		reaper.MIDI_Sort(m.activeTake)
-		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+		-- note repeater
+		if m.seqRepeatF then
+			DeleteNotes()
+			t3 = {} -- temp table for repeater (no undo)
+		--m.loopStartG, m.loopLenG, m.loopNum, m.loopMaxRep
+		--m.t_loopStart, m.t_loopRep, m.t_loopLenG
+			local loopStartP = m.t_loopStart[m.loopStartG] * gridSize
+			local loopLenP = m.loopLenG * gridSize
+			local loopEndP = loopStartP + loopLenP
+			local loopNum = m.loopNum
+			local writeOffP = 0
+			if loopStartP > 0 then writeOffP = -loopStartP else writeOffP = 0 end
+			
+			if debug or m.debug then ConMsg("itemLenP   = " .. tostring(itemLenP)) end
+			if debug or m.debug then ConMsg("loopStartP = " .. tostring(loopStartP)) end
+			if debug or m.debug then ConMsg("loopLenP   = " .. tostring(loopLenP)) end
+			if debug or m.debug then ConMsg("loopEndP   = " .. tostring(loopEndP)) end
+			if debug or m.debug then ConMsg("loopNum   = " .. tostring(loopNum)) end
+			if debug or m.debug then ConMsg("writeOffP  = " .. tostring(writeOffP)) end
+			
+			if debug or m.debug then ConMsg("\nStart repeater...") end
+			while loopNum > 0 do
+				if debug or m.debug then ConMsg("\nloopNum  = " .. tostring(loopNum)) end
+				if debug or m.debug then ConMsg("writeOffP   = " .. tostring(writeOffP)) end
+	
+				for k, v in pairs(t2) do
+					if v[3] >= loopStartP and v[3] < loopEndP then
+						t3[k] = {}	
+						t3[k][1] = v[1]; 
+						t3[k][2] = v[2]; 
+						t3[k][3] = v[3] + writeOffP
+						
+						if v[4] > loopEndP then
+							t3[k][4] = loopEndP + writeOffP
+						else 
+							t3[k][4] = v[4] + writeOffP
+						end
+						
+						t3[k][5] = v[5]; 
+						t3[k][6] = v[6]; 
+						t3[k][7] = v[7]; 
+						t3[k][8] = v[8]; 
+						if debug or m.debug then ConMsg("a - idx = " .. tostring(k) .. " - Start = " .. tostring(v[3]) .. " - End = " .. tostring(v[4])) end
+						if debug or m.debug then ConMsg("b - idx = " .. tostring(k) .. " - Start = " .. tostring(t3[k][3]) .. " - End = " .. tostring(t3[k][4])) end
+						reaper.MIDI_InsertNote(m.activeTake, t3[k][1], t3[k][2], t3[k][3], t3[k][4], t3[k][6], t3[k][7], t3[k][8], false)
+					end -- if v[3]
+				end -- for k, v t2
+				loopNum = loopNum - 1
+				writeOffP = writeOffP + loopLenP
+			end
+			reaper.MIDI_Sort(m.activeTake)
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+		else -- note m.seqRepeatF
+			DeleteNotes()
+			while t2[i] do
+				reaper.MIDI_InsertNote(m.activeTake, t1[i][1], t1[i][2], t1[i][3], t1[i][4], t1[i][6], t1[i][7], t1[i][8], false)
+				--1=selected, 2=muted, 3=startppq, 4=endppq, 5=len, 6=chan, 7=pitch, 8=vel, noSort)		
+				i = i + 1
+			end -- while t2[i]
+			reaper.MIDI_Sort(m.activeTake)
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+		end
 	else
 		if debug or m.debug then ConMsg("No Active Take") end
 	end -- m.activeTake
@@ -1039,7 +1068,7 @@ end
 -- PrintNotes - arg note_buffer t; print note_buffer to reaper console
 --------------------------------------------------------------------------------
 function PrintNotes(t) -- debug code
-	local debug = false
+	local debug = true
 	if debug or m.debug then ConMsg("PrintNotes()") end
 	local i = 1
 	local str = "sel \t mut \t s_ppq \t e_ppq \t leng \t chan \t pitch \t vel \n"
@@ -1113,7 +1142,7 @@ t_winElements = {winFrame, zoomDrop, winText, layerBtn01, layerBtn02, layerBtn03
 -- Common Elements
 --------------------------------------------------------------------------------
 -- key, octave, & scale droplists
-dx, dy, dw, dh = 25, 70, 110, 20
+dx, dy, dw, dh = 25, 70, 100, 20
 local keyDrop = e.Droplist:new({1, 2, 3}, dx, dy,		 dw, dh, e.col_blue, "Root Note", e.Arial, 16, e.col_grey8, m.key, m.notes)
 local octDrop = e.Droplist:new({1, 2, 3}, dx, dy + 45, dw, dh, e.col_blue, "Octave ", e.Arial, 16, e.col_grey8, m.oct,{0, 1, 2, 3, 4, 5, 6, 7})
 local scaleDrop = e.Droplist:new({1, 2, 3}, dx, dy + 90, dw, dh, e.col_blue, "Scale", e.Arial, 16, e.col_grey8, 1, m.scalelist)
@@ -1123,7 +1152,7 @@ local t_Droplists = {keyDrop, octDrop, scaleDrop}
 -- Randomiser Layer
 --------------------------------------------------------------------------------
 -- note randomise button
-local randomBtn = e.Button:new({1}, 25, 205, 110, 25, e.col_green, "Generate", e.Arial, 16, e.col_grey8)
+local randomBtn = e.Button:new({1}, 25, 205, 100, 25, e.col_green, "Generate", e.Arial, 16, e.col_grey8)
 -- note weight sliders
 local nx, ny, nw, nh, np = 160, 50, 30, 150, 40
 local noteSldr01 = e.Vert_Slider:new({1}, nx,        ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
@@ -1148,66 +1177,67 @@ local probSldrText = e.Textbox:new({1}, nx, 210, 510, 20, e.col_grey5, "Note Wei
 local octProbSldr = e.Vert_Slider:new({1}, nx+(np*13) + 10,  ny, nw, nh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.rndOctProb, 0, 0, 10, 1)
 local octProbText = e.Textbox:new({1}, nx+(np*13) + 10, 210, (nw), 20, e.col_grey5, "Oct", e.Arial, 16, e.col_grey7) 
 -- Note randomiser options
-local noteOptionsCb = e.Checkbox:new({1}, nx+(np*14)+10, ny+30, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0},   {"All / Sel Notes", "1st Note = Root", "Octave X2"})
+local noteOptionsCb = e.Checkbox:new({1}, nx+(np*15)-10, ny+30, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0},   {"All / Sel Notes", "1st Note = Root", "Octave X2"})
 local noteOptionText = e.Textbox:new({1}, nx+(np*14)+20, 210, (nw*4), 20, e.col_grey5, "Options", e.Arial, 16, e.col_grey7)
 
 --------------------------------------------------------------------------------
 -- Sequencer Layer
 --------------------------------------------------------------------------------
 -- sequence generate button
-local sequenceBtn = e.Button:new({2}, 25, 205, 110, 25, e.col_yellow, "Generate", e.Arial, 16, e.col_grey8)
-local sx, sy, sw, sh, sp = 160, 50, 30, 150, 40
+local sequenceBtn = e.Button:new({2}, 25, 205, 100, 25, e.col_yellow, "Generate", e.Arial, 16, e.col_grey8)
+local sx, sy, sw, sh, sp = 140, 50, 30, 150, 40
 -- sequencer grid size radio selector
 local seqGridRad = e.Rad_Button:new({2,3}, sx, sy + 40, 30, 30, e.col_yellow, "", e.Arial, 16, e.col_grey8, 1, {"1/16", "1/8", "1/4"})
-local seqGridText = e.Textbox:new({2,3}, sx, 210, (sw*2)+20, 20, e.col_grey5, "Grid Size", e.Arial, 16, e.col_grey7)
+local seqGridText = e.Textbox:new({2,3}, sx+5, 210, (sw*2)+5, 20, e.col_grey5, "Grid Size", e.Arial, 16, e.col_grey7)
 -- sequence grid probability sliders
-local seqSldr16   = e.Vert_Slider:new({2}, sx+(sp*3),  sy, sw, sh, e.col_blue, "1/16",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
-local seqSldr8    = e.Vert_Slider:new({2}, sx+(sp*4),  sy, sw, sh, e.col_blue, "1/8",   e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
-local seqSldr4    = e.Vert_Slider:new({2}, sx+(sp*5),  sy, sw, sh, e.col_blue, "1/4",   e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
-local seqSldrRest = e.Vert_Slider:new({2}, sx+(sp*6),  sy, sw, sh, e.col_blue, "Rest",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+local seqSldr16   = e.Vert_Slider:new({2}, sx+(sp*2)+20,  sy, sw, sh, e.col_blue, "1/16",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+local seqSldr8    = e.Vert_Slider:new({2}, sx+(sp*3)+20,  sy, sw, sh, e.col_blue, "1/8",   e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+local seqSldr4    = e.Vert_Slider:new({2}, sx+(sp*4)+20,  sy, sw, sh, e.col_blue, "1/4",   e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+local seqSldrRest = e.Vert_Slider:new({2}, sx+(sp*5)+20,  sy, sw, sh, e.col_blue, "Rest",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
 -- sequence grid probability slider table
 local t_seqSliders = {seqSldr16, seqSldr8, seqSldr4, seqSldrRest}
 -- sequence grid probability sliders label - right click to reset all (per grid size selection)
-local seqSldrText = e.Textbox:new({2}, sx + (sp * 3), 210, (sw * 5), 20, e.col_grey5, "Size Weight Sliders", e.Arial, 16, e.col_grey7)
+local seqSldrText = e.Textbox:new({2}, sx+(sp * 2)+20, 210, (sw * 5), 20, e.col_grey5, "Size Weight Sliders", e.Arial, 16, e.col_grey7)
 
 -- velocity accent slider (shared with Euclid layer)
-local seqAccRSldr  = e.V_Rng_Slider:new({2,3},  sx + (sp * 8) - (sw / 2), sy, sw, sh, e.col_blue, "", e.Arial, 16, e.col_grey8, m.accentLow, m.accentHigh, 0, 127, 1)
-local seqAccProbSldr = e.Vert_Slider:new({2,3}, sx + (sp * 9) - (sw / 2), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.accentProb, 0, 0, 10, 1)
-local seqAccSldrText = e.Textbox:new({2,3},     sx + (sp * 8) - (sw / 2), 210, (sw * 2) + 10, 20, e.col_grey5, "Vel  |  Acc", e.Arial, 16, e.col_grey7)
+local seqAccRSldr  = e.V_Rng_Slider:new({2,3},  sx+(sp*7), sy, sw, sh, e.col_blue, "", e.Arial, 16, e.col_grey8, m.accentLow, m.accentHigh, 0, 127, 1)
+local seqAccProbSldr = e.Vert_Slider:new({2,3}, sx+(sp*8), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.accentProb, 0, 0, 10, 1)
+local seqAccSldrText = e.Textbox:new({2,3},     sx+(sp*7), 210, (sw * 2) + 10, 20, e.col_grey5, "Vel  |  Acc", e.Arial, 16, e.col_grey7)
 
 -- legato slider
-local seqLegProbSldr = e.Vert_Slider:new({2}, sx + (sp * 10) - (sw / 2), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.legatoProb, 0, 0, 10, 1)
-local seqLegSldrText = e.Textbox:new({2},     sx + (sp * 10) - (sw / 2), 210, sw, 20, e.col_grey5, "Leg", e.Arial, 16, e.col_grey7)
+local seqLegProbSldr = e.Vert_Slider:new({2}, sx+(sp * 9), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.legatoProb, 0, 0, 10, 1)
+local seqLegSldrText = e.Textbox:new({2},     sx+(sp * 9), 210, sw, 20, e.col_grey5, "Leg", e.Arial, 16, e.col_grey7)
 
 -- repeat dropboxes
-local seqRepLenDrop = e.Droplist:new({2}, sx + (sp * 11) + 10, sy + 15, sw * 3, 20, e.col_blue, "Length", e.Arial, 16, e.col_grey8, m.repLenGrid, m.repLenGridT)
-local seqRepNumDrop = e.Droplist:new({2}, sx + (sp * 11) + 10, sy + 60, sw * 3, 20, e.col_blue, "Amount", e.Arial, 16, e.col_grey8, m.repNum, m.repNumT)
-local seqRepText = e.Textbox:new({2},     sx + (sp * 11) + 10, sy + 90, sw * 3, 20, e.col_grey5, "Repeat", e.Arial, 16, e.col_grey7)
+local seqRepLenDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+15,  sw*2, 20, e.col_blue,  "Length", e.Arial, 16, e.col_grey8, m.loopLenG, m.t_loopLenG)
+local seqRepNumDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+65,  sw*2, 20, e.col_blue,  "Amount", e.Arial, 16, e.col_grey8, m.loopNum, m.t_loopRep)
+local seqRepStartDrop = e.Droplist:new({2}, sx+(sp*10)+25, sy+115, sw*2, 20, e.col_blue,  "Start",  e.Arial, 16, e.col_grey8, m.loopStartG, m.t_loopStart)
+local seqRepText = e.Textbox:new({2},       sx+(sp*10)+25, 210,    sw*2, 20, e.col_grey5, "Repeat", e.Arial, 16, e.col_grey7)
 
 -- sequence shift buttons
-local seqShiftLBtn = e.Button:new({2},  sx + (sp * 11) + 10, sy + sh - 25, sw, 25, e.col_blue, "<<", e.Arial, 16, e.col_grey8)
-local seqShiftRBtn = e.Button:new({2},  sx + (sp * 13) - 10, sy + sh - 25, sw, 25, e.col_blue, ">>", e.Arial, 16, e.col_grey8)
-local seqShiftVal  = e.Textbox:new({2}, sx + (sp * 12),      sy + sh - 25, sw, 25, e.col_grey5, tostring(m.seqShift), e.Arial, 16, e.col_grey7)
-local seqShiftText = e.Textbox:new({2}, sx + (sp * 11) + 10, 210, sw * 3, 20, e.col_grey5, "Shift Notes", e.Arial, 16, e.col_grey7)
+local seqShiftLBtn = e.Button:new({2},  sx+(sp*12)+30, sy+sh-25, sw-5,    25, e.col_blue, "<<", e.Arial, 16, e.col_grey8)
+local seqShiftVal  = e.Textbox:new({2}, sx+(sp*13)+15, sy+sh-25, sw,      25, e.col_grey5, tostring(m.seqShift), e.Arial, 16, e.col_grey7)
+local seqShiftRBtn = e.Button:new({2},  sx+(sp*14)+5,  sy+sh-25, sw-5,    25, e.col_blue, ">>", e.Arial, 16, e.col_grey8)
+local seqShiftText = e.Textbox:new({2}, sx+(sp*12)+30, 210,      sw*3-10, 20, e.col_grey5, "Shift Notes", e.Arial, 16, e.col_grey7)
 
 -- Sequencer options
-local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 14) + 10, sy + 5, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0,0,0}, {"Generate", "1st Note Always", "Accent", "Legato", "Rnd Notes"})
+local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 15) + 10, sy + 5, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0,0,0}, {"Generate", "Force 1st Note", "Accent", "Legato", "Rnd Notes", "Repeat"})
 
 --------------------------------------------------------------------------------
 -- Euclid Layer
 --------------------------------------------------------------------------------
 -- euclid generate button
-local euclidBtn = e.Button:new({3}, 25, 205, 110, 25, e.col_orange, "Generate", Arial, 16, e.col_grey8)
+local euclidBtn = e.Button:new({3}, 25, 205, 100, 25, e.col_orange, "Generate", Arial, 16, e.col_grey8)
 -- euclidean sliders
 local ex, ey, ew, eh, ep = 160, 50, 30, 150, 40
-local euclidPulsesSldr = e.Vert_Slider:new({3}, ex+(ep*3), ey, ew, eh, e.col_blue, "Puls", Arial, 16, e.col_grey8, m.eucPulses, 0, 1, 24, 1)
-local euclidStepsSldr = e.Vert_Slider:new({3}, ex+(ep*4), ey, ew, eh, e.col_blue, "Step", Arial, 16, e.col_grey8, m.eucSteps, 0, 1, 24, 1)
-local euclidRotationSldr = e.Vert_Slider:new({3}, ex+(ep*5), ey, ew, eh, e.col_blue, "Rot",  Arial, 16, e.col_grey8, m.eucRot, 0, 0, 24, 1)
+local euclidPulsesSldr = e.Vert_Slider:new({3}, ex+(ep*2), ey, ew, eh, e.col_blue, "Puls", Arial, 16, e.col_grey8, m.eucPulses, 0, 1, 24, 1)
+local euclidStepsSldr = e.Vert_Slider:new({3}, ex+(ep*3), ey, ew, eh, e.col_blue, "Step", Arial, 16, e.col_grey8, m.eucSteps, 0, 1, 24, 1)
+local euclidRotationSldr = e.Vert_Slider:new({3}, ex+(ep*4), ey, ew, eh, e.col_blue, "Rot",  Arial, 16, e.col_grey8, m.eucRot, 0, 0, 24, 1)
 local t_euclidSliders = {euclidPulsesSldr, euclidStepsSldr, euclidRotationSldr}
 -- euclid slider label - right click to reset all
-local txtEuclidLabel = e.Textbox:new({3}, ex + (ep * 3), 210, (ew * 3) + 20, 20, e.col_grey5, "Euclid Sliders", Arial, 16, e.col_grey7)
+local txtEuclidLabel = e.Textbox:new({3}, ex + (ep * 2), 210, (ew * 3) + 20, 20, e.col_grey5, "Euclid Sliders", Arial, 16, e.col_grey7)
 -- Sequencer options
-local eucOptionsCb = e.Checkbox:new({3},  ex + (ep * 14) + 10, ey + 40, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0}, {"Generate", "Accent", "Rnd Notes"})
+local eucOptionsCb = e.Checkbox:new({3},  ex + (ep * 15)- 10, ey + 40, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0}, {"Generate", "Accent", "Rnd Notes"})
 
 --------------------------------------------------------------------------------
 -- Options Layer
@@ -1224,7 +1254,7 @@ local msgText = e.Textbox:new({9}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.w
 --------------------------------------------------------------------------------
 local t_Buttons = {randomBtn, sequenceBtn, seqShiftLBtn, seqShiftRBtn, euclidBtn}
 local t_Checkboxes = {noteOptionsCb, seqOptionsCb, eucOptionsCb}
-local t_Droplists2 = {seqRepLenDrop, seqRepNumDrop}
+local t_Droplists2 = {seqRepLenDrop, seqRepNumDrop, seqRepStartDrop}
 local t_RadButtons = {seqGridRad}
 local t_RSliders = {octProbSldr, seqAccRSldr, seqAccProbSldr, seqLegProbSldr}
 local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqShiftVal, seqRepText, seqShiftText, seqAccSldrText, seqLegSldrText, txtEuclidLabel, optText, msgText}
@@ -1707,7 +1737,51 @@ seqShiftRBtn.onLClick = function()
 	seqShiftVal.label = tostring(m.seqShift)
 	InsertNotes()
 end
+-- Sequencer repeat length
+seqRepLenDrop.onLClick = function()
+	local debug = true
+	if debug or m.debug then ConMsg("\noseqRepLenDrop.onLClick()") end
+	m.loopLenG = seqRepLenDrop.val1
+	if debug or m.debug then ConMsg("m.loopLenG = " .. tostring(m.loopLenG)) end
+--seqRepLenDrop  
+--seqRepNumDrop  
+--seqRepStartDrop
 
+	-- set project ext state	
+	--pExtState.oct = m.oct
+	--pExtState.root = m.root
+	--pExtSaveStateF = true
+end
+-- Sequencer repeat length
+seqRepNumDrop.onLClick = function()
+	local debug = true
+	if debug or m.debug then ConMsg("\noseqRepNumDrop.onLClick()") end
+	m.loopNum = seqRepNumDrop.val1
+	if debug or m.debug then ConMsg("m.loopNum = " .. tostring(m.loopNum)) end
+--seqRepLenDrop  
+--seqRepNumDrop  
+--seqRepStartDrop
+
+	-- set project ext state	
+	--pExtState.oct = m.oct
+	--pExtState.root = m.root
+	--pExtSaveStateF = true
+end
+-- Sequencer repeat length
+seqRepStartDrop.onLClick = function()
+	local debug = true
+	if debug or m.debug then ConMsg("\noseqRepStartDrop.onLClick()") end
+	m.loopStartG = seqRepStartDrop.val1
+	if debug or m.debug then ConMsg("m.loopStartG = " .. tostring(m.t_loopStart[m.loopStartG])) end
+--seqRepLenDrop  
+--seqRepNumDrop  
+--seqRepStartDrop
+
+	-- set project ext state	
+	--pExtState.oct = m.oct
+	--pExtState.root = m.root
+	--pExtSaveStateF = true
+end
 -- Set sequencer default options
 function SetDefaultSeqOptions()
 	local debug = false
@@ -1820,18 +1894,24 @@ function SetDefaultSeqRepeat()
 	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
 	local gridSize = m.reaGrid * m.ppqn
 	local itemLength = GetItemLength()
-	m.repNum = 1; m.repLenGrid = 1
-	seqRepNumDrop.val1 = m.repNum
-	seqRepLenDrop.val1 = m.repLenGrid
-	m.repMax = math.floor(itemLength / gridSize)	
-	for i = 1, m.repMax do
+
+	m.loopLenG = 1; m.loopNum = 1; m.loopStartG = 1
+	
+	seqRepNumDrop.val1 = m.loopNum
+	seqRepLenDrop.val1 = m.loopLenG
+	seqRepStartDrop.val1 = m.loopStartG
+	
+	m.loopMaxRep = math.floor(itemLength / gridSize)	
+	
+	for i = 1, m.loopMaxRep do
 		seqRepNumDrop.val2[i] = i
 		seqRepLenDrop.val2[i] = i
+		seqRepStartDrop.val2[i] = i-1
 	end
 	--[[
 m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN
-seqRepLenDrop, m.repLenGridT)
-seqRepNumDrop, m.repNumT)
+seqRepLenDrop, m.t_loopLenG)
+seqRepNumDrop, m.t_loopRep)
 --]]
 end
 
