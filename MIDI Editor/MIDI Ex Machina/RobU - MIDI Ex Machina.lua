@@ -105,7 +105,7 @@ m.seqAccentF = true -- generate accents (option)
 m.seqLegatoF = false -- use legato (option)
 m.seqRndNotesF = true -- randomise notes (option) 
 m.seqRepeatF = false -- repeat sequence by grid length (option - not implemented yet)
-m.legato = -10 -- default legatolessness value
+m.legato = 10 -- default legatolessness value
 m.accentLow = 100; m.accentHigh = 127; m.accentProb = 3 -- default values (options)
 -- accentLow/High - min 0, max 127; accentProb - min 0, max 10
 m.legatoProb = 3 -- default value (option - min 0, max 10)
@@ -498,6 +498,15 @@ function GetNotesFromTake()
 				t[i][6] = channel
 				t[i][7] = pitch
 				t[i][8] = velocity
+				if not m.seqLegF then
+				if       t[i][5] >= 950 and t[i][5] <= 960 then t[i][5] = 960; t[i][4] = t[i][3] + t[i][5]; t[i][9] = true -- 1/4
+					elseif t[i][5] >= 470 and t[i][5] <= 480 then t[i][5] = 480; t[i][4] = t[i][3] + t[i][5]; t[i][9] = true -- 1/8
+					elseif t[i][5] >= 230 and t[i][5] <= 240 then t[i][5] = 240; t[i][4] = t[i][3] + t[i][5]; t[i][9] = true -- 1/16
+					else t[i][9] = false
+				end
+				end
+  
+--]]
 			end -- for i				
 		end -- num_notes
 	else -- no active take
@@ -581,12 +590,12 @@ function GenLegatoTable(probTable, probSlider)
 	ClearTable(probTable)
 	-- no legato
 	for i = 1, (probSlider.max - probSlider.val1) do
-		probTable[j] = m.legato
+		probTable[j] = false
 		j = j + 1
 	end
 	-- legato
 	for i = 1, (probSlider.val1) do
-		probTable[j] = 0
+		probTable[j] = true
 		j = j + 1
 	end
 end
@@ -750,7 +759,7 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 	local itemPos = 0
 	local gridSize = m.reaGrid * m.ppqn
 	local itemLength = GetItemLength()
-	local noteStart, noteEnd, noteLen, noteVel = 0, 0, 0, 0
+	local noteStart, noteEnd, noteLen, noteVel, notLeg = 0, 0, 0, 0, 0
 	local newNote = 0
 	local noteCount = 0; restCount = 0
 	while itemPos < itemLength do
@@ -775,9 +784,9 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 			noteEnd = noteStart + noteLen			
 			itemPos = itemPos + noteLen
 			if m.seqLegatoF then  -- handle legato flag
-				noteEnd = noteEnd + legProbTable[math.random(1, #legProbTable)]
+				noteLeg = legProbTable[math.random(1, #legProbTable)]
 			else
-				noteEnd = noteEnd + m.legato
+				noteLeg = false
 			end 
 			if m.seqAccentF then  -- handle accent flag
 				noteVel = accProbTable[math.random(1, #accProbTable)]
@@ -793,7 +802,11 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 			t[noteCount][5] = noteLen             -- note length
 			t[noteCount][6] = 0                   -- channel
 			t[noteCount][7] = m.root              -- note number
+			
 			t[noteCount][8] = noteVel             -- velocity
+			
+			t[noteCount][9] = noteLeg             -- legato
+			
 		end -- newNote
 	end -- itemPos < itemLength
 	if debug or m.debug then PrintNotes(t) end
@@ -846,6 +859,7 @@ function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 			t[noteCount][6] = 0                   -- channel
 			t[noteCount][7] = m.root              -- note number
 			t[noteCount][8] = noteVel             -- velocity
+			t[noteCount][9] = false               -- handle legatolessness
 		else
 			itemPos = itemPos + gridSize
 			restCount = restCount + 1
@@ -868,24 +882,27 @@ function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 	local noteStart, noteEnd, noteLen = 0, 0, 0
 	CopyTable(t1, t2)
 	if debug and m.debug then PrintNotes(t2) end
-	while t2[i] do
-		if t2[i][1] then
+	for k, v in pairs(t2) do
+		-- fix legato
+	if not legF then
+		if       v[5] >= 950 and v[5] <= 960 then v[5] = 960; v[4] = v[3] + v[5]; v[9] = true -- 1/4
+			elseif v[5] >= 470 and v[5] <= 480 then v[5] = 480; v[4] = v[3] + v[5]; v[9] = true -- 1/8
+			elseif v[5] >= 230 and v[5] <= 240 then v[5] = 240; v[4] = v[3] + v[5]; v[9] = true -- 1/16
+			else v[9] = false
+		end
+	end
+		if v[1] then -- selected
 			if accF then -- handle accent flag (8 = velocity)
-				t2[i][8] = accProbTable[math.random(1, #accProbTable)]
-			end -- end accent
+				v[8] = accProbTable[math.random(1, #accProbTable)]
+			end -- end accF
 			if legF ~= 1 then -- no legato when called by euclid
-				if legF then -- handle legato flag (3 = noteStart, 4 = noteEnd, 5 = noteLen)
-					noteLen = t2[i][5]
-					if noteLen >= 960 + m.legato and noteLen <= 960 - m.legato then noteLen = 960 -- 1/4
-					elseif noteLen >= 480 + m.legato and noteLen <= 480 - m.legato then noteLen = 480 -- 1/8
-					elseif noteLen >= 240 + m.legato and noteLen <= 240 - m.legato then noteLen = 240 -- 1/16
-					end
-					t2[i][4] = t2[i][3] + noteLen + legProbTable[math.random(1, #legProbTable)]
-				end -- legato     
-			end -- t2[i]
-		end --selected
-		i = i + 1    
-	end -- while t1[i]
+				if legF then -- handle legato flag 
+					v[9] = legProbTable[math.random(1, #legProbTable)]
+				end -- legF     
+			end -- legF ~= 1
+		end -- selected 
+
+	end -- for k, v t2
 	if debug and m.debug then PrintNotes(t2) end
 	PurgeNoteBuf()
 	InsertNotes()
@@ -924,31 +941,32 @@ function InsertNotes()
 		local t1 = GetNoteBuf()	
 		PrintNotes(t1)		
 		-- note shifter
-		local t2 = {} -- temp for note shifter (no undo)
+		local t2 = {} -- temp table for note shifter (no undo)
 		CopyTable(t1, t2)		
+		
 		for k, v in pairs(t2) do
 			v[3] = v[3] + noteShift
 			v[4] = v[4] + noteShift			
+			
 			if v[3] < 0 then
 				v[3] = itemLenP + v[3]
 				v[4] = itemLenP + v[4]	
-					if v[4] > itemLenP then v[4] = itemLenP + m.legato end
+					if v[4] > itemLenP then v[4] = itemLenP end
 			elseif v[3] >= itemLenP then
 				v[3] = v[3] - itemLenP
 				v[4] = v[4] - itemLenP				
 			end
-		end -- end note shifter
+		end -- for k, v t2
 
 		-- note repeater
 		if m.seqRepeatF then
 			DeleteNotes()
-			t3 = {} -- temp table for repeater (no undo)
-		--m.loopStartG, m.loopLenG, m.loopNum, m.loopMaxRep
-		--m.t_loopStart, m.t_loopRep, m.t_loopLenG
+			t3 = {} -- temp table for note repeater (no undo)
 			local loopStartP = m.t_loopStart[m.loopStartG] * gridSize
 			local loopLenP = m.loopLenG * gridSize
 			local loopEndP = loopStartP + loopLenP
 			local loopNum = m.loopNum
+			local noteEnd
 			local writeOffP = 0
 			if loopStartP > 0 then writeOffP = -loopStartP else writeOffP = 0 end
 			
@@ -967,40 +985,45 @@ function InsertNotes()
 				for k, v in pairs(t2) do
 					if v[3] >= loopStartP and v[3] < loopEndP then
 						t3[k] = {}	
-						t3[k][1] = v[1]; 
-						t3[k][2] = v[2]; 
-						t3[k][3] = v[3] + writeOffP
+						t3[k][1] = v[1] -- selected 
+						t3[k][2] = v[2] -- muted
+
+						t3[k][3] = v[3] + writeOffP -- startppqn
 						
-						if v[4] > loopEndP then
+						if v[4] > loopEndP then -- endppqn
 							t3[k][4] = loopEndP + writeOffP
 						else 
 							t3[k][4] = v[4] + writeOffP
 						end
+					
+						if not t3[k][9] then t3[k][4] = t3[k][4] - m.legato end -- handle the legatolessness
 						
-						t3[k][5] = v[5]; 
-						t3[k][6] = v[6]; 
-						t3[k][7] = v[7]; 
-						t3[k][8] = v[8]; 
+						t3[k][6] = v[6] -- channel
+						t3[k][7] = v[7] -- pitch
+						t3[k][8] = v[8] -- vel
 						if debug or m.debug then ConMsg("a - idx = " .. tostring(k) .. " - Start = " .. tostring(v[3]) .. " - End = " .. tostring(v[4])) end
 						if debug or m.debug then ConMsg("b - idx = " .. tostring(k) .. " - Start = " .. tostring(t3[k][3]) .. " - End = " .. tostring(t3[k][4])) end
 						reaper.MIDI_InsertNote(m.activeTake, t3[k][1], t3[k][2], t3[k][3], t3[k][4], t3[k][6], t3[k][7], t3[k][8], false)
+						
 					end -- if v[3]
-				end -- for k, v t2
+				end -- for k, v t3
 				loopNum = loopNum - 1
 				writeOffP = writeOffP + loopLenP
 			end
 			reaper.MIDI_Sort(m.activeTake)
 			reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
-		else -- note m.seqRepeatF
+		else -- not m.seqRepeatF
 			DeleteNotes()
-			while t2[i] do
-				reaper.MIDI_InsertNote(m.activeTake, t1[i][1], t1[i][2], t1[i][3], t1[i][4], t1[i][6], t1[i][7], t1[i][8], false)
+			
+			for k, v in pairs(t2) do
+				if not v[9] then v[4] = v[4] - m.legato end-- handle the legatolessness
+				reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)
 				--1=selected, 2=muted, 3=startppq, 4=endppq, 5=len, 6=chan, 7=pitch, 8=vel, noSort)		
-				i = i + 1
-			end -- while t2[i]
+			end -- for k, v t2
+			
 			reaper.MIDI_Sort(m.activeTake)
 			reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
-		end
+		end -- m.seqRepeatF
 	else
 		if debug or m.debug then ConMsg("No Active Take") end
 	end -- m.activeTake
@@ -1071,7 +1094,7 @@ function PrintNotes(t) -- debug code
 	local debug = true
 	if debug or m.debug then ConMsg("PrintNotes()") end
 	local i = 1
-	local str = "sel \t mut \t s_ppq \t e_ppq \t leng \t chan \t pitch \t vel \n"
+	local str = "sel \t mut \t s_ppq \t e_ppq \t leng \t chan \t pitch \t vel \t leg \n"
 	while t[i] do
 		j = 1
 		while (t[i][j] ~= nil)   do	
