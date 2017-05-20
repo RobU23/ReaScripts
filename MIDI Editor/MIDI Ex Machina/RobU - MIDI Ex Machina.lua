@@ -81,6 +81,7 @@ m.win_bg = {0, 0, 0} -- background colour
 m.def_zoom = 4 -- 100% (option)
 -- zoom values are 1=70, 2=80, 3=90, 4=100, 5=110%, 6=120, 7=140, 8=160, 9=180, 10=200
 m.zoomF = false
+m.defFont = e.Lucinda; m.defFontSz = 15
 
 -- default octave & key
 -- due to some quirk, oct 4 is really oct 3...
@@ -106,6 +107,7 @@ m.seqLegatoF = false -- use legato (option)
 m.seqRndNotesF = true -- randomise notes (option) 
 m.seqRepeatF = false -- repeat sequence by grid length (option - not implemented yet)
 m.legato = 10 -- default legatolessness value
+m.legQ = 240
 m.accentLow = 100; m.accentHigh = 127; m.accentProb = 3 -- default values (options)
 -- accentLow/High - min 0, max 127; accentProb - min 0, max 10
 m.legatoProb = 3 -- default value (option - min 0, max 10)
@@ -116,7 +118,7 @@ m.seqShift = 0; m.seqShiftMin = -16; m.seqShiftMax = 16 -- shift notes left-righ
 m.loopStartG, m.loopLenG, m.loopNum, m.loopMaxRep = 0, 0, 0, 0 -- repeat values for GUI
 m.t_loopStart, m.t_loopRep, m.t_loopLenG = {}, {}, {} -- repeat value tables
 
-m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN  = 0, 0, 0, 0 -- repeat values
+--m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN  = 0, 0, 0, 0 -- repeat values
 
 
 -- euclidean generator
@@ -479,13 +481,15 @@ end
 -- GetNotesFromTake() - fill a note buffer from the active take
 --------------------------------------------------------------------------------
 function GetNotesFromTake()
-	local debug = false
+	local debug = true
 	if debug or m.debug then ConMsg("GetNotesFromTake()") end
 	local i, t
 	if m.activeTake then
 		local _retval, num_notes, num_cc, num_sysex = reaper.MIDI_CountEvts(m.activeTake)
 		if num_notes > 0 then 
 			t = GetNoteBuf(); if t == nil then t = NewNoteBuf() end
+			local gridSize = GetReaperGrid()
+			local div, rem, noteLen
 			ClearTable(t)
 			for i = 1, num_notes do
 				_retval, selected, muted, startppq, endppq, channel, pitch, velocity = reaper.MIDI_GetNote(m.activeTake, i-1)
@@ -493,22 +497,20 @@ function GetNotesFromTake()
 				t[i][1] = selected
 				t[i][2] = muted
 				t[i][3] = startppq
-				t[i][4] = endppq
-				t[i][5] = endppq-startppq
+					noteLen = endppq - startppq
+					div = math.floor(noteLen / m.legQ + 0.5)
+					if div < 1 then div = 1 end
+					rem = noteLen % m.legQ
+					noteLen = div * m.legQ
+				t[i][4] = startppq + noteLen
+				t[i][5] = noteLen			
 				t[i][6] = channel
 				t[i][7] = pitch
 				t[i][8] = velocity
-				if not m.seqLegF then
-				if       t[i][5] >= 950 and t[i][5] <= 960 then t[i][5] = 960; t[i][4] = t[i][3] + t[i][5]; t[i][9] = true -- 1/4
-					elseif t[i][5] >= 470 and t[i][5] <= 480 then t[i][5] = 480; t[i][4] = t[i][3] + t[i][5]; t[i][9] = true -- 1/8
-					elseif t[i][5] >= 230 and t[i][5] <= 240 then t[i][5] = 240; t[i][4] = t[i][3] + t[i][5]; t[i][9] = true -- 1/16
-					else t[i][9] = false
-				end
-				end
-  
---]]
+				t[i][9] = rem == 0 and true or false
 			end -- for i				
 		end -- num_notes
+		if debug or m.debug then PrintNotes(t) end
 	else -- no active take
 		if debug or m.debug then ConMsg("No Active Take") end
 	end -- m.activeTake
@@ -878,19 +880,12 @@ function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 	if debug or m.debug then ConMsg("GenNoteAttributes()") end
 	if not accF and not legF then return end
 	local t1, t2 = GetNoteBuf(), NewNoteBuf()
+	local gridSize = GetReaperGrid()
 	local i = 1
-	local noteStart, noteEnd, noteLen = 0, 0, 0
+	local div, rem, noteLen
 	CopyTable(t1, t2)
 	if debug and m.debug then PrintNotes(t2) end
 	for k, v in pairs(t2) do
-		-- fix legato
-	if not legF then
-		if       v[5] >= 950 and v[5] <= 960 then v[5] = 960; v[4] = v[3] + v[5]; v[9] = true -- 1/4
-			elseif v[5] >= 470 and v[5] <= 480 then v[5] = 480; v[4] = v[3] + v[5]; v[9] = true -- 1/8
-			elseif v[5] >= 230 and v[5] <= 240 then v[5] = 240; v[4] = v[3] + v[5]; v[9] = true -- 1/16
-			else v[9] = false
-		end
-	end
 		if v[1] then -- selected
 			if accF then -- handle accent flag (8 = velocity)
 				v[8] = accProbTable[math.random(1, #accProbTable)]
@@ -940,18 +935,17 @@ function InsertNotes()
 		local noteShift = m.seqShift * gridSize
 		local t1 = GetNoteBuf()	
 		PrintNotes(t1)		
+
 		-- note shifter
 		local t2 = {} -- temp table for note shifter (no undo)
 		CopyTable(t1, t2)		
-		
 		for k, v in pairs(t2) do
 			v[3] = v[3] + noteShift
 			v[4] = v[4] + noteShift			
-			
 			if v[3] < 0 then
 				v[3] = itemLenP + v[3]
 				v[4] = itemLenP + v[4]	
-					if v[4] > itemLenP then v[4] = itemLenP end
+				if v[4] > itemLenP then v[4] = itemLenP end
 			elseif v[3] >= itemLenP then
 				v[3] = v[3] - itemLenP
 				v[4] = v[4] - itemLenP				
@@ -1093,6 +1087,7 @@ end
 function PrintNotes(t) -- debug code
 	local debug = true
 	if debug or m.debug then ConMsg("PrintNotes()") end
+	if not t then return end
 	local i = 1
 	local str = "sel \t mut \t s_ppq \t e_ppq \t leng \t chan \t pitch \t vel \t leg \n"
 	while t[i] do
@@ -1113,6 +1108,7 @@ end
 function PrintTable(t) -- debug code
 	local debug = false
 	if debug or m.debug then ConMsg("PrintTable()") end
+	if not t then return end
 	local str = ""
 	for k, v in pairs(t) do
 			str = str .. tostring(v) .. "\t"
@@ -1150,14 +1146,14 @@ end
 --------------------------------------------------------------------------------
 -- Persistent window elements
 local winFrame = e.Frame:new({0}, 5, 5, m.win_w - 10, m.win_h - 10, e.col_grey4)
-local zoomDrop = e.Droplist:new({0}, 5, 5, 40, 22, e.col_green, "", e.Arial, 16, e.col_grey8, 4, {"70%", "80%", "90%", "100%", "110%", "120%", "140%", "160%", "180%", "200%"})
-local winText  = e.Textbox:new({0}, 45, 5, m.win_w - 50, 22, e.col_green, "MIDI Ex Machina    ", e.Arial, 16, e.col_grey8)
-local layerBtn01 = e.Button:new({0}, 5, m.win_h - 25, 100, 20, e.col_green, "Randomiser", e.Arial, 16, e.col_grey8)
-local layerBtn02 = e.Button:new({0}, 105, m.win_h - 25, 100, 20, e.col_grey5, "Sequencer", e.Arial, 16, e.col_grey7)
-local layerBtn03 = e.Button:new({0}, 205, m.win_h - 25, 100, 20, e.col_grey5, "Euclidiser", e.Arial, 16, e.col_grey7)
-local layerBtn04 = e.Button:new({0}, 305, m.win_h - 25, 100, 20, e.col_grey5, "Options", e.Arial, 16, e.col_grey7)
-local undoBtn = e.Button:new({0}, m.win_w-85, m.win_h -25, 40, 20, e.col_grey5, "Undo", e.Arial, 16, e.col_grey7)
-local redoBtn = e.Button:new({0}, m.win_w-45, m.win_h -25, 40, 20, e.col_grey5, "Redo", e.Arial, 16, e.col_grey7)
+local zoomDrop = e.Droplist:new({0}, 5, 5, 40, 22, e.col_green, "", m.defFont, m.defFontSz, e.col_grey8, 4, {"70%", "80%", "90%", "100%", "110%", "120%", "140%", "160%", "180%", "200%"})
+local winText  = e.Textbox:new({0}, 45, 5, m.win_w - 50, 22, e.col_green, "MIDI Ex Machina    ", m.defFont, m.defFontSz, e.col_grey8)
+local layerBtn01 = e.Button:new({0}, 5, m.win_h - 25, 100, 20, e.col_green, "Randomiser", m.defFont, m.defFontSz, e.col_grey8)
+local layerBtn02 = e.Button:new({0}, 105, m.win_h - 25, 100, 20, e.col_grey5, "Sequencer", m.defFont, m.defFontSz, e.col_grey7)
+local layerBtn03 = e.Button:new({0}, 205, m.win_h - 25, 100, 20, e.col_grey5, "Euclidiser", m.defFont, m.defFontSz, e.col_grey7)
+local layerBtn04 = e.Button:new({0}, 305, m.win_h - 25, 100, 20, e.col_grey5, "Options", m.defFont, m.defFontSz, e.col_grey7)
+local undoBtn = e.Button:new({0}, m.win_w-85, m.win_h -25, 40, 20, e.col_grey5, "Undo", m.defFont, m.defFontSz, e.col_grey7)
+local redoBtn = e.Button:new({0}, m.win_w-45, m.win_h -25, 40, 20, e.col_grey5, "Redo", m.defFont, m.defFontSz, e.col_grey7)
 -- Persistent window element table
 t_winElements = {winFrame, zoomDrop, winText, layerBtn01, layerBtn02, layerBtn03, layerBtn04, undoBtn, redoBtn}
 
@@ -1166,121 +1162,121 @@ t_winElements = {winFrame, zoomDrop, winText, layerBtn01, layerBtn02, layerBtn03
 --------------------------------------------------------------------------------
 -- key, octave, & scale droplists
 dx, dy, dw, dh = 25, 70, 100, 20
-local keyDrop = e.Droplist:new({1, 2, 3}, dx, dy,		 dw, dh, e.col_blue, "Root Note", e.Arial, 16, e.col_grey8, m.key, m.notes)
-local octDrop = e.Droplist:new({1, 2, 3}, dx, dy + 45, dw, dh, e.col_blue, "Octave ", e.Arial, 16, e.col_grey8, m.oct,{0, 1, 2, 3, 4, 5, 6, 7})
-local scaleDrop = e.Droplist:new({1, 2, 3}, dx, dy + 90, dw, dh, e.col_blue, "Scale", e.Arial, 16, e.col_grey8, 1, m.scalelist)
+local keyDrop = e.Droplist:new({1, 2, 3}, dx, dy,		 dw, dh, e.col_blue, "Root Note", m.defFont, m.defFontSz, e.col_grey8, m.key, m.notes)
+local octDrop = e.Droplist:new({1, 2, 3}, dx, dy + 45, dw, dh, e.col_blue, "Octave ", m.defFont, m.defFontSz, e.col_grey8, m.oct,{0, 1, 2, 3, 4, 5, 6, 7})
+local scaleDrop = e.Droplist:new({1, 2, 3}, dx, dy + 90, dw, dh, e.col_blue, "Scale", m.defFont, m.defFontSz, e.col_grey8, 1, m.scalelist)
 local t_Droplists = {keyDrop, octDrop, scaleDrop} 
 
 --------------------------------------------------------------------------------
 -- Randomiser Layer
 --------------------------------------------------------------------------------
 -- note randomise button
-local randomBtn = e.Button:new({1}, 25, 205, 100, 25, e.col_green, "Generate", e.Arial, 16, e.col_grey8)
+local randomBtn = e.Button:new({1}, 25, 205, 100, 25, e.col_green, "Generate", m.defFont, m.defFontSz, e.col_grey8)
 -- note weight sliders
 local nx, ny, nw, nh, np = 160, 50, 30, 150, 40
-local noteSldr01 = e.Vert_Slider:new({1}, nx,        ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr02 = e.Vert_Slider:new({1}, nx+(np*1), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr03 = e.Vert_Slider:new({1}, nx+(np*2), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr04 = e.Vert_Slider:new({1}, nx+(np*3), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr05 = e.Vert_Slider:new({1}, nx+(np*4), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr06 = e.Vert_Slider:new({1}, nx+(np*5), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr07 = e.Vert_Slider:new({1}, nx+(np*6), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr08 = e.Vert_Slider:new({1}, nx+(np*7), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr09 = e.Vert_Slider:new({1}, nx+(np*8), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr10 = e.Vert_Slider:new({1}, nx+(np*9), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr11 = e.Vert_Slider:new({1}, nx+(np*10), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr12 = e.Vert_Slider:new({1}, nx+(np*11), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
-local noteSldr13 = e.Vert_Slider:new({1}, nx+(np*12), ny, nw, nh, e.col_blue, "", e.Arial, 16, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr01 = e.Vert_Slider:new({1}, nx,        ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr02 = e.Vert_Slider:new({1}, nx+(np*1), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr03 = e.Vert_Slider:new({1}, nx+(np*2), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr04 = e.Vert_Slider:new({1}, nx+(np*3), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr05 = e.Vert_Slider:new({1}, nx+(np*4), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr06 = e.Vert_Slider:new({1}, nx+(np*5), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr07 = e.Vert_Slider:new({1}, nx+(np*6), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr08 = e.Vert_Slider:new({1}, nx+(np*7), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr09 = e.Vert_Slider:new({1}, nx+(np*8), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr10 = e.Vert_Slider:new({1}, nx+(np*9), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr11 = e.Vert_Slider:new({1}, nx+(np*10), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr12 = e.Vert_Slider:new({1}, nx+(np*11), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
+local noteSldr13 = e.Vert_Slider:new({1}, nx+(np*12), ny, nw, nh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, 1, 0, 0, 12, 1)
 -- Note probability slider table
 local t_noteSliders = {noteSldr01, noteSldr02, noteSldr03, noteSldr04, noteSldr05, noteSldr06, noteSldr07,
 	noteSldr08, noteSldr09, noteSldr10, noteSldr11, noteSldr12, noteSldr13}
 -- Note probability slider label (Textbox) - right-click to reset all
-local probSldrText = e.Textbox:new({1}, nx, 210, 510, 20, e.col_grey5, "Note Weight Sliders", e.Arial, 16, e.col_grey7)
+local probSldrText = e.Textbox:new({1}, nx, 210, 510, 20, e.col_grey5, "Note Weight Sliders", m.defFont, m.defFontSz, e.col_grey7)
 -- Note octave doubler probability slider
-local octProbSldr = e.Vert_Slider:new({1}, nx+(np*13) + 10,  ny, nw, nh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.rndOctProb, 0, 0, 10, 1)
-local octProbText = e.Textbox:new({1}, nx+(np*13) + 10, 210, (nw), 20, e.col_grey5, "Oct", e.Arial, 16, e.col_grey7) 
+local octProbSldr = e.Vert_Slider:new({1}, nx+(np*13) + 10,  ny, nw, nh, e.col_blue, "%", m.defFont, m.defFontSz, e.col_grey8, m.rndOctProb, 0, 0, 10, 1)
+local octProbText = e.Textbox:new({1}, nx+(np*13) + 10, 210, (nw), 20, e.col_grey5, "Oct", m.defFont, m.defFontSz, e.col_grey7) 
 -- Note randomiser options
-local noteOptionsCb = e.Checkbox:new({1}, nx+(np*15)-10, ny+30, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0},   {"All / Sel Notes", "1st Note = Root", "Octave X2"})
-local noteOptionText = e.Textbox:new({1}, nx+(np*14)+20, 210, (nw*4), 20, e.col_grey5, "Options", e.Arial, 16, e.col_grey7)
+local noteOptionsCb = e.Checkbox:new({1}, nx+(np*15)-10, ny+30, 30, 30, e.col_orange, "", m.defFont, m.defFontSz, e.col_grey8, {0,0,0},   {"All / Sel Notes", "1st Note = Root", "Octave X2"})
+local noteOptionText = e.Textbox:new({1}, nx+(np*14)+20, 210, (nw*4), 20, e.col_grey5, "Options", m.defFont, m.defFontSz, e.col_grey7)
 
 --------------------------------------------------------------------------------
 -- Sequencer Layer
 --------------------------------------------------------------------------------
 -- sequence generate button
-local sequenceBtn = e.Button:new({2}, 25, 205, 100, 25, e.col_yellow, "Generate", e.Arial, 16, e.col_grey8)
+local sequenceBtn = e.Button:new({2}, 25, 205, 100, 25, e.col_yellow, "Generate", m.defFont, m.defFontSz, e.col_grey8)
 local sx, sy, sw, sh, sp = 140, 50, 30, 150, 40
 -- sequencer grid size radio selector
-local seqGridRad = e.Rad_Button:new({2,3}, sx, sy + 40, 30, 30, e.col_yellow, "", e.Arial, 16, e.col_grey8, 1, {"1/16", "1/8", "1/4"})
-local seqGridText = e.Textbox:new({2,3}, sx+5, 210, (sw*2)+5, 20, e.col_grey5, "Grid Size", e.Arial, 16, e.col_grey7)
+local seqGridRad = e.Rad_Button:new({2,3}, sx, sy + 40, 30, 30, e.col_yellow, "", m.defFont, m.defFontSz, e.col_grey8, 1, {"1/16", "1/8", "1/4"})
+local seqGridText = e.Textbox:new({2,3}, sx+5, 210, (sw*2)+5, 20, e.col_grey5, "Grid Size", m.defFont, m.defFontSz, e.col_grey7)
 -- sequence grid probability sliders
-local seqSldr16   = e.Vert_Slider:new({2}, sx+(sp*2)+20,  sy, sw, sh, e.col_blue, "1/16",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
-local seqSldr8    = e.Vert_Slider:new({2}, sx+(sp*3)+20,  sy, sw, sh, e.col_blue, "1/8",   e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
-local seqSldr4    = e.Vert_Slider:new({2}, sx+(sp*4)+20,  sy, sw, sh, e.col_blue, "1/4",   e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
-local seqSldrRest = e.Vert_Slider:new({2}, sx+(sp*5)+20,  sy, sw, sh, e.col_blue, "Rest",  e.Arial, 16, e.col_grey8, 0, 0, 0, 16, 1)
+local seqSldr16   = e.Vert_Slider:new({2}, sx+(sp*2)+20,  sy, sw, sh, e.col_blue, "1/16",  m.defFont, m.defFontSz, e.col_grey8, 0, 0, 0, m.defFontSz, 1)
+local seqSldr8    = e.Vert_Slider:new({2}, sx+(sp*3)+20,  sy, sw, sh, e.col_blue, "1/8",   m.defFont, m.defFontSz, e.col_grey8, 0, 0, 0, m.defFontSz, 1)
+local seqSldr4    = e.Vert_Slider:new({2}, sx+(sp*4)+20,  sy, sw, sh, e.col_blue, "1/4",   m.defFont, m.defFontSz, e.col_grey8, 0, 0, 0, m.defFontSz, 1)
+local seqSldrRest = e.Vert_Slider:new({2}, sx+(sp*5)+20,  sy, sw, sh, e.col_blue, "Rest",  m.defFont, m.defFontSz, e.col_grey8, 0, 0, 0, m.defFontSz, 1)
 -- sequence grid probability slider table
 local t_seqSliders = {seqSldr16, seqSldr8, seqSldr4, seqSldrRest}
 -- sequence grid probability sliders label - right click to reset all (per grid size selection)
-local seqSldrText = e.Textbox:new({2}, sx+(sp * 2)+20, 210, (sw * 5), 20, e.col_grey5, "Size Weight Sliders", e.Arial, 16, e.col_grey7)
+local seqSldrText = e.Textbox:new({2}, sx+(sp * 2)+20, 210, (sw * 5), 20, e.col_grey5, "Size Weight Sliders", m.defFont, m.defFontSz, e.col_grey7)
 
 -- velocity accent slider (shared with Euclid layer)
-local seqAccRSldr  = e.V_Rng_Slider:new({2,3},  sx+(sp*7), sy, sw, sh, e.col_blue, "", e.Arial, 16, e.col_grey8, m.accentLow, m.accentHigh, 0, 127, 1)
-local seqAccProbSldr = e.Vert_Slider:new({2,3}, sx+(sp*8), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.accentProb, 0, 0, 10, 1)
-local seqAccSldrText = e.Textbox:new({2,3},     sx+(sp*7), 210, (sw * 2) + 10, 20, e.col_grey5, "Vel  |  Acc", e.Arial, 16, e.col_grey7)
+local seqAccRSldr  = e.V_Rng_Slider:new({2,3},  sx+(sp*7), sy, sw, sh, e.col_blue, "", m.defFont, m.defFontSz, e.col_grey8, m.accentLow, m.accentHigh, 0, 127, 1)
+local seqAccProbSldr = e.Vert_Slider:new({2,3}, sx+(sp*8), sy, sw, sh, e.col_blue, "%", m.defFont, m.defFontSz, e.col_grey8, m.accentProb, 0, 0, 10, 1)
+local seqAccSldrText = e.Textbox:new({2,3},     sx+(sp*7), 210, (sw * 2) + 10, 20, e.col_grey5, "Vel  |  Acc", m.defFont, m.defFontSz, e.col_grey7)
 
 -- legato slider
-local seqLegProbSldr = e.Vert_Slider:new({2}, sx+(sp * 9), sy, sw, sh, e.col_blue, "%", e.Arial, 16, e.col_grey8, m.legatoProb, 0, 0, 10, 1)
-local seqLegSldrText = e.Textbox:new({2},     sx+(sp * 9), 210, sw, 20, e.col_grey5, "Leg", e.Arial, 16, e.col_grey7)
+local seqLegProbSldr = e.Vert_Slider:new({2}, sx+(sp * 9), sy, sw, sh, e.col_blue, "%", m.defFont, m.defFontSz, e.col_grey8, m.legatoProb, 0, 0, 10, 1)
+local seqLegSldrText = e.Textbox:new({2},     sx+(sp * 9), 210, sw, 20, e.col_grey5, "Leg", m.defFont, m.defFontSz, e.col_grey7)
 
 -- repeat dropboxes
-local seqRepLenDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+15,  sw*2, 20, e.col_blue,  "Length", e.Arial, 16, e.col_grey8, m.loopLenG, m.t_loopLenG)
-local seqRepNumDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+65,  sw*2, 20, e.col_blue,  "Amount", e.Arial, 16, e.col_grey8, m.loopNum, m.t_loopRep)
-local seqRepStartDrop = e.Droplist:new({2}, sx+(sp*10)+25, sy+115, sw*2, 20, e.col_blue,  "Start",  e.Arial, 16, e.col_grey8, m.loopStartG, m.t_loopStart)
-local seqRepText = e.Textbox:new({2},       sx+(sp*10)+25, 210,    sw*2, 20, e.col_grey5, "Repeat", e.Arial, 16, e.col_grey7)
+local seqLoopLenDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+15,  sw*2, 20, e.col_blue,  "Length", m.defFont, m.defFontSz, e.col_grey8, m.loopLenG, m.t_loopLenG)
+local seqLoopNumDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+65,  sw*2, 20, e.col_blue,  "Amount", m.defFont, m.defFontSz, e.col_grey8, m.loopNum, m.t_loopRep)
+local seqLoopStartDrop = e.Droplist:new({2}, sx+(sp*10)+25, sy+115, sw*2, 20, e.col_blue,  "Start",  m.defFont, m.defFontSz, e.col_grey8, m.loopStartG, m.t_loopStart)
+local seqLoopText      = e.Textbox:new({2},  sx+(sp*10)+25, 210,    sw*2, 20, e.col_grey5, "Repeat", m.defFont, m.defFontSz, e.col_grey7)
 
 -- sequence shift buttons
-local seqShiftLBtn = e.Button:new({2},  sx+(sp*12)+30, sy+sh-25, sw-5,    25, e.col_blue, "<<", e.Arial, 16, e.col_grey8)
-local seqShiftVal  = e.Textbox:new({2}, sx+(sp*13)+15, sy+sh-25, sw,      25, e.col_grey5, tostring(m.seqShift), e.Arial, 16, e.col_grey7)
-local seqShiftRBtn = e.Button:new({2},  sx+(sp*14)+5,  sy+sh-25, sw-5,    25, e.col_blue, ">>", e.Arial, 16, e.col_grey8)
-local seqShiftText = e.Textbox:new({2}, sx+(sp*12)+30, 210,      sw*3-10, 20, e.col_grey5, "Shift Notes", e.Arial, 16, e.col_grey7)
+local seqShiftLBtn = e.Button:new({2},  sx+(sp*12)+30, sy+sh-25, sw-5,    25, e.col_blue, "<<", m.defFont, m.defFontSz, e.col_grey8)
+local seqShiftVal  = e.Textbox:new({2}, sx+(sp*13)+15, sy+sh-25, sw,      25, e.col_grey5, tostring(m.seqShift), m.defFont, m.defFontSz, e.col_grey7)
+local seqShiftRBtn = e.Button:new({2},  sx+(sp*14)+5,  sy+sh-25, sw-5,    25, e.col_blue, ">>", m.defFont, m.defFontSz, e.col_grey8)
+local seqShiftText = e.Textbox:new({2}, sx+(sp*12)+30, 210,      sw*3-10, 20, e.col_grey5, "Shift Notes", m.defFont, m.defFontSz, e.col_grey7)
 
 -- Sequencer options
-local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 15) + 10, sy + 5, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0,0,0}, {"Generate", "Force 1st Note", "Accent", "Legato", "Rnd Notes", "Repeat"})
+local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 15) + 10, sy + 5, 30, 30, e.col_orange, "", m.defFont, m.defFontSz, e.col_grey8, {0,0,0,0,0}, {"Generate", "Force 1st Note", "Accent", "Legato", "Rnd Notes", "Repeat"})
 
 --------------------------------------------------------------------------------
 -- Euclid Layer
 --------------------------------------------------------------------------------
 -- euclid generate button
-local euclidBtn = e.Button:new({3}, 25, 205, 100, 25, e.col_orange, "Generate", Arial, 16, e.col_grey8)
+local euclidBtn = e.Button:new({3}, 25, 205, 100, 25, e.col_orange, "Generate", m.defFont, m.defFontSz, e.col_grey8)
 -- euclidean sliders
 local ex, ey, ew, eh, ep = 160, 50, 30, 150, 40
-local euclidPulsesSldr = e.Vert_Slider:new({3}, ex+(ep*2), ey, ew, eh, e.col_blue, "Puls", Arial, 16, e.col_grey8, m.eucPulses, 0, 1, 24, 1)
-local euclidStepsSldr = e.Vert_Slider:new({3}, ex+(ep*3), ey, ew, eh, e.col_blue, "Step", Arial, 16, e.col_grey8, m.eucSteps, 0, 1, 24, 1)
-local euclidRotationSldr = e.Vert_Slider:new({3}, ex+(ep*4), ey, ew, eh, e.col_blue, "Rot",  Arial, 16, e.col_grey8, m.eucRot, 0, 0, 24, 1)
+local euclidPulsesSldr = e.Vert_Slider:new({3}, ex+(ep*2), ey, ew, eh, e.col_blue, "Puls", m.defFont, m.defFontSz, e.col_grey8, m.eucPulses, 0, 1, 24, 1)
+local euclidStepsSldr = e.Vert_Slider:new({3}, ex+(ep*3), ey, ew, eh, e.col_blue, "Step", m.defFont, m.defFontSz, e.col_grey8, m.eucSteps, 0, 1, 24, 1)
+local euclidRotationSldr = e.Vert_Slider:new({3}, ex+(ep*4), ey, ew, eh, e.col_blue, "Rot",  m.defFont, m.defFontSz, e.col_grey8, m.eucRot, 0, 0, 24, 1)
 local t_euclidSliders = {euclidPulsesSldr, euclidStepsSldr, euclidRotationSldr}
 -- euclid slider label - right click to reset all
-local txtEuclidLabel = e.Textbox:new({3}, ex + (ep * 2), 210, (ew * 3) + 20, 20, e.col_grey5, "Euclid Sliders", Arial, 16, e.col_grey7)
+local txtEuclidLabel = e.Textbox:new({3}, ex + (ep * 2), 210, (ew * 3) + 20, 20, e.col_grey5, "Euclid Sliders", m.defFont, m.defFontSz, e.col_grey7)
 -- Sequencer options
-local eucOptionsCb = e.Checkbox:new({3},  ex + (ep * 15)- 10, ey + 40, 30, 30, e.col_orange, "", e.Arial, 16, e.col_grey8, {0,0,0}, {"Generate", "Accent", "Rnd Notes"})
+local eucOptionsCb = e.Checkbox:new({3},  ex + (ep * 15)- 10, ey + 40, 30, 30, e.col_orange, "", m.defFont, m.defFontSz, e.col_grey8, {0,0,0}, {"Generate", "Accent", "Rnd Notes"})
 
 --------------------------------------------------------------------------------
 -- Options Layer
 --------------------------------------------------------------------------------
-local optText = e.Textbox:new({4}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.win_h - 80, e.col_grey5, "Nothing to see here, yet...", e.Arial, 16, e.col_grey8)
+local optText = e.Textbox:new({4}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.win_h - 80, e.col_grey5, "Nothing to see here, yet...", m.defFont, m.defFontSz, e.col_grey8)
 
 --------------------------------------------------------------------------------
 -- Messages Layer
 --------------------------------------------------------------------------------
-local msgText = e.Textbox:new({9}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.win_h - 80, e.col_greym, "", e.Arial, 22, e.col_grey9)
+local msgText = e.Textbox:new({9}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.win_h - 80, e.col_greym, "", m.defFont, 22, e.col_grey9)
 
 --------------------------------------------------------------------------------
 -- Shared Element Tables
 --------------------------------------------------------------------------------
 local t_Buttons = {randomBtn, sequenceBtn, seqShiftLBtn, seqShiftRBtn, euclidBtn}
 local t_Checkboxes = {noteOptionsCb, seqOptionsCb, eucOptionsCb}
-local t_Droplists2 = {seqRepLenDrop, seqRepNumDrop, seqRepStartDrop}
+local t_Droplists2 = {seqLoopLenDrop, seqLoopNumDrop, seqLoopStartDrop}
 local t_RadButtons = {seqGridRad}
 local t_RSliders = {octProbSldr, seqAccRSldr, seqAccProbSldr, seqLegProbSldr}
-local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqShiftVal, seqRepText, seqShiftText, seqAccSldrText, seqLegSldrText, txtEuclidLabel, optText, msgText}
+local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqShiftVal, seqLoopText, seqShiftText, seqAccSldrText, seqLegSldrText, txtEuclidLabel, optText, msgText}
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -1761,14 +1757,14 @@ seqShiftRBtn.onLClick = function()
 	InsertNotes()
 end
 -- Sequencer repeat length
-seqRepLenDrop.onLClick = function()
+seqLoopLenDrop.onLClick = function()
 	local debug = true
-	if debug or m.debug then ConMsg("\noseqRepLenDrop.onLClick()") end
-	m.loopLenG = seqRepLenDrop.val1
+	if debug or m.debug then ConMsg("\noseqLoopLenDrop.onLClick()") end
+	m.loopLenG = seqLoopLenDrop.val1
 	if debug or m.debug then ConMsg("m.loopLenG = " .. tostring(m.loopLenG)) end
---seqRepLenDrop  
---seqRepNumDrop  
---seqRepStartDrop
+--seqLoopLenDrop  
+--seqLoopNumDrop  
+--seqLoopStartDrop
 
 	-- set project ext state	
 	--pExtState.oct = m.oct
@@ -1776,14 +1772,14 @@ seqRepLenDrop.onLClick = function()
 	--pExtSaveStateF = true
 end
 -- Sequencer repeat length
-seqRepNumDrop.onLClick = function()
+seqLoopNumDrop.onLClick = function()
 	local debug = true
-	if debug or m.debug then ConMsg("\noseqRepNumDrop.onLClick()") end
-	m.loopNum = seqRepNumDrop.val1
+	if debug or m.debug then ConMsg("\noseqLoopNumDrop.onLClick()") end
+	m.loopNum = seqLoopNumDrop.val1
 	if debug or m.debug then ConMsg("m.loopNum = " .. tostring(m.loopNum)) end
---seqRepLenDrop  
---seqRepNumDrop  
---seqRepStartDrop
+--seqLoopLenDrop  
+--seqLoopNumDrop  
+--seqLoopStartDrop
 
 	-- set project ext state	
 	--pExtState.oct = m.oct
@@ -1791,14 +1787,14 @@ seqRepNumDrop.onLClick = function()
 	--pExtSaveStateF = true
 end
 -- Sequencer repeat length
-seqRepStartDrop.onLClick = function()
+seqLoopStartDrop.onLClick = function()
 	local debug = true
-	if debug or m.debug then ConMsg("\noseqRepStartDrop.onLClick()") end
-	m.loopStartG = seqRepStartDrop.val1
+	if debug or m.debug then ConMsg("\noseqLoopStartDrop.onLClick()") end
+	m.loopStartG = seqLoopStartDrop.val1
 	if debug or m.debug then ConMsg("m.loopStartG = " .. tostring(m.t_loopStart[m.loopStartG])) end
---seqRepLenDrop  
---seqRepNumDrop  
---seqRepStartDrop
+--seqLoopLenDrop  
+--seqLoopNumDrop  
+--seqLoopStartDrop
 
 	-- set project ext state	
 	--pExtState.oct = m.oct
@@ -1920,21 +1916,21 @@ function SetDefaultSeqRepeat()
 
 	m.loopLenG = 1; m.loopNum = 1; m.loopStartG = 1
 	
-	seqRepNumDrop.val1 = m.loopNum
-	seqRepLenDrop.val1 = m.loopLenG
-	seqRepStartDrop.val1 = m.loopStartG
+	seqLoopNumDrop.val1 = m.loopNum
+	seqLoopLenDrop.val1 = m.loopLenG
+	seqLoopStartDrop.val1 = m.loopStartG
 	
 	m.loopMaxRep = math.floor(itemLength / gridSize)	
 	
 	for i = 1, m.loopMaxRep do
-		seqRepNumDrop.val2[i] = i
-		seqRepLenDrop.val2[i] = i
-		seqRepStartDrop.val2[i] = i-1
+		seqLoopNumDrop.val2[i] = i
+		seqLoopLenDrop.val2[i] = i
+		seqLoopStartDrop.val2[i] = i-1
 	end
 	--[[
 m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN
-seqRepLenDrop, m.t_loopLenG)
-seqRepNumDrop, m.t_loopRep)
+seqLoopLenDrop, m.t_loopLenG)
+seqLoopNumDrop, m.t_loopRep)
 --]]
 end
 
