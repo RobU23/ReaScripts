@@ -481,7 +481,7 @@ end
 -- GetNotesFromTake() - fill a note buffer from the active take
 --------------------------------------------------------------------------------
 function GetNotesFromTake()
-	local debug = true
+	local debug = false
 	if debug or m.debug then ConMsg("GetNotesFromTake()") end
 	local i, t
 	if m.activeTake then
@@ -723,7 +723,7 @@ end
 -- RandomiseNotesPoly(noteProbTable)
 --------------------------------------------------------------------------------
 function RandomiseNotesPoly(noteProbTable)
-	local debug = true
+	local debug = false
 	if debug or m.debug then ConMsg("RandomiseNotesPoly()") end
 	m.dupes.i = 1
 	local  i = 1
@@ -752,7 +752,7 @@ end
 -- GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 --------------------------------------------------------------------------------
 function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
-	local debug = true
+	local debug = false
 	if debug or m.debug then ConMsg("GenSequence()") end
 	local t, t2 = NewNoteBuf(), GetNoteBuf()
 	CopyTable(t2, t)
@@ -804,9 +804,7 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 			t[noteCount][5] = noteLen             -- note length
 			t[noteCount][6] = 0                   -- channel
 			t[noteCount][7] = m.root              -- note number
-			
 			t[noteCount][8] = noteVel             -- velocity
-			
 			t[noteCount][9] = noteLeg             -- legato
 			
 		end -- newNote
@@ -903,26 +901,6 @@ function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 	InsertNotes()
 end
 --------------------------------------------------------------------------------
--- SetNotes - arg notebuf t1; set notes in the active take
---------------------------------------------------------------------------------
-function SetNotes()
-	local debug = false
-	if debug or m.debug then ConMsg("SetNotes()") end
-	local i = 1
-	if m.activeTake then
-		local t1 = GetNoteBuf()
-		while t1[i] do
-			reaper.MIDI_SetNote(m.activeTake, i-1, t1[i][1], t1[i][2], t1[i][3], t1[i][4], t1[i][6], t1[i][7], t1[i][8], __)
-			--1=selected, 2=muted, 3=startppq, 4=endppq, 5=len, 6=chan, 7=pitch, 8=vel, noSort)		
-			i = i + 1
-		end -- while t1[i]
-		reaper.MIDI_Sort(m.activeTake)
-		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
-	else
-		if debug or m.debug then ConMsg("No Active Take") end
-	end -- m.activeTake
-end
---------------------------------------------------------------------------------
 -- InsertNotes() - insert current note buffer in the active take
 --------------------------------------------------------------------------------
 function InsertNotes()
@@ -954,9 +932,10 @@ function InsertNotes()
 
 		-- note repeater
 		if m.seqRepeatF then
+			if debug then ConMsg("Repeating...") end
 			DeleteNotes()
 			t3 = {} -- temp table for note repeater (no undo)
-			local loopStartP = m.t_loopStart[m.loopStartG] * gridSize
+			local loopStartP = (m.t_loopStart[m.loopStartG] - 1) * gridSize
 			local loopLenP = m.loopLenG * gridSize
 			local loopEndP = loopStartP + loopLenP
 			local loopNum = m.loopNum
@@ -1228,9 +1207,9 @@ local seqLegProbSldr = e.Vert_Slider:new({2}, sx+(sp * 9), sy, sw, sh, e.col_blu
 local seqLegSldrText = e.Textbox:new({2},     sx+(sp * 9), 210, sw, 20, e.col_grey5, "Leg", m.defFont, m.defFontSz, e.col_grey7)
 
 -- repeat dropboxes
-local seqLoopLenDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+15,  sw*2, 20, e.col_blue,  "Length", m.defFont, m.defFontSz, e.col_grey8, m.loopLenG, m.t_loopLenG)
-local seqLoopNumDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+65,  sw*2, 20, e.col_blue,  "Amount", m.defFont, m.defFontSz, e.col_grey8, m.loopNum, m.t_loopRep)
-local seqLoopStartDrop = e.Droplist:new({2}, sx+(sp*10)+25, sy+115, sw*2, 20, e.col_blue,  "Start",  m.defFont, m.defFontSz, e.col_grey8, m.loopStartG, m.t_loopStart)
+local seqLoopStartDrop = e.Droplist:new({2}, sx+(sp*10)+25, sy+15,  sw*2, 20, e.col_blue,  "Start",  m.defFont, m.defFontSz, e.col_grey8, m.loopStartG, m.t_loopStart)
+local seqLoopLenDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+65,  sw*2, 20, e.col_blue,  "Length", m.defFont, m.defFontSz, e.col_grey8, m.loopLenG, m.t_loopLenG)
+local seqLoopNumDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+115, sw*2, 20, e.col_blue,  "Amount", m.defFont, m.defFontSz, e.col_grey8, m.loopNum, m.t_loopRep)
 local seqLoopText      = e.Textbox:new({2},  sx+(sp*10)+25, 210,    sw*2, 20, e.col_grey5, "Repeat", m.defFont, m.defFontSz, e.col_grey7)
 
 -- sequence shift buttons
@@ -1614,8 +1593,10 @@ sequenceBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nsequenceBtn.onLClick()") end
 	if m.activeTake then 
-			m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
-			seqShiftVal.label = tostring(m.seqShift)	
+		m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Turn off repeat
+		InsertNotes()
+		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
+		seqShiftVal.label = tostring(m.seqShift)	
 		if m.seqF then
 			SetSeqGridSizes(t_seqSliders)
 			GenProbTable(m.preSeqProbTable, t_seqSliders, m.seqProbTable)
@@ -1654,7 +1635,8 @@ sequenceBtn.onLClick = function()
 				pExtState.seqGrid4[k] = v.val1
 			end
 		end	
-		
+    m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Turn on repeat
+		InsertNotes()
 		pExtState.seqAccRSldrLo = seqAccRSldr.val1
 		pExtState.seqAccRSldrHi = seqAccRSldr.val2
 		pExtState.seqAccProb = seqAccProbSldr.val1
@@ -1663,6 +1645,7 @@ sequenceBtn.onLClick = function()
 		pExtSaveStateF = true
 	end  --m.activeTake
 end
+
 -- Sequencer options toggle logic 
 seqOptionsCb.onLClick = function()
 	local debug = false
@@ -1673,10 +1656,14 @@ seqOptionsCb.onLClick = function()
 	m.seqLegatoF = 		seqOptionsCb.val1[4] == 1 and true or false -- Legato
 	m.seqRndNotesF = 	seqOptionsCb.val1[5] == 1 and true or false -- Randomise Notes
 	m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Repeat
+	if pExtState.seqOptionsCb then
+		if pExtState.seqOptionsCb[6] ~= m.seqRepeatF then InsertNotes() end
+	end
 	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
 	pExtSaveStateF = true
 	if debug or m.debug then PrintTable(seqOptionsCb.val1) end
 end
+
 -- Sequencer grid radio button
 seqGridRad.onLClick = function() -- change grid size
 	local debug = false
@@ -1730,6 +1717,7 @@ seqGridRad.onLClick = function() -- change grid size
 		
 	end -- m.activeTake
 end
+
 -- Sequencer shift left
 seqShiftLBtn.onLClick = function()
 	local gridSize = m.reaGrid * m.ppqn
@@ -1756,51 +1744,41 @@ seqShiftRBtn.onLClick = function()
 	seqShiftVal.label = tostring(m.seqShift)
 	InsertNotes()
 end
+
+-- Sequencer repeat start
+seqLoopStartDrop.onLClick = function()
+	local debug = true
+	if debug or m.debug then ConMsg("\nseqLoopStartDrop.onLClick()") end
+	m.loopStartG = seqLoopStartDrop.val1
+	UpdateSeqRepeat()
+	-- set project ext state	
+	--pExtState.oct = m.oct
+	--pExtState.root = m.root
+	--pExtSaveStateF = true
+end
 -- Sequencer repeat length
 seqLoopLenDrop.onLClick = function()
 	local debug = true
-	if debug or m.debug then ConMsg("\noseqLoopLenDrop.onLClick()") end
+	if debug or m.debug then ConMsg("\nseqLoopLenDrop.onLClick()") end
 	m.loopLenG = seqLoopLenDrop.val1
-	if debug or m.debug then ConMsg("m.loopLenG = " .. tostring(m.loopLenG)) end
---seqLoopLenDrop  
---seqLoopNumDrop  
---seqLoopStartDrop
-
+	UpdateSeqRepeat()
 	-- set project ext state	
 	--pExtState.oct = m.oct
 	--pExtState.root = m.root
 	--pExtSaveStateF = true
 end
--- Sequencer repeat length
+-- Sequencer repeat amount
 seqLoopNumDrop.onLClick = function()
 	local debug = true
-	if debug or m.debug then ConMsg("\noseqLoopNumDrop.onLClick()") end
+	if debug or m.debug then ConMsg("\nseqLoopNumDrop.onLClick()") end
 	m.loopNum = seqLoopNumDrop.val1
-	if debug or m.debug then ConMsg("m.loopNum = " .. tostring(m.loopNum)) end
---seqLoopLenDrop  
---seqLoopNumDrop  
---seqLoopStartDrop
-
+	UpdateSeqRepeat()
 	-- set project ext state	
 	--pExtState.oct = m.oct
 	--pExtState.root = m.root
 	--pExtSaveStateF = true
 end
--- Sequencer repeat length
-seqLoopStartDrop.onLClick = function()
-	local debug = true
-	if debug or m.debug then ConMsg("\noseqLoopStartDrop.onLClick()") end
-	m.loopStartG = seqLoopStartDrop.val1
-	if debug or m.debug then ConMsg("m.loopStartG = " .. tostring(m.t_loopStart[m.loopStartG])) end
---seqLoopLenDrop  
---seqLoopNumDrop  
---seqLoopStartDrop
 
-	-- set project ext state	
-	--pExtState.oct = m.oct
-	--pExtState.root = m.root
-	--pExtSaveStateF = true
-end
 -- Set sequencer default options
 function SetDefaultSeqOptions()
 	local debug = false
@@ -1824,6 +1802,7 @@ function SetDefaultSeqOptions()
 	seqOptionsCb.val1[5] = (true and m.seqRndNotesF) and 1 or 0 -- random notes
 	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0 -- repeat
 end
+
 -- Set default accent & legato sliders
 function SetDefaultAccLegSliders()
 	local debug = false
@@ -1850,6 +1829,7 @@ function SetDefaultAccLegSliders()
 		seqLegProbSldr.val1 = m.legatoProb
 	end
 end
+
 -- Set default grid sliders
 function SetDefaultSeqGridSliders()
 	local debug = false
@@ -1899,6 +1879,7 @@ function SetDefaultSeqGridSliders()
 		end
 		
 end
+
 -- Set default sequencer shift state
 function SetDefaultSeqShift()
 	local debug = false
@@ -1908,6 +1889,7 @@ function SetDefaultSeqShift()
 		m.seqShiftMax = 0
 		seqShiftVal.label = tostring(m.seqShift)
 end
+
 -- Set default sequencer repeat state
 function SetDefaultSeqRepeat()
 	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
@@ -1923,9 +1905,9 @@ function SetDefaultSeqRepeat()
 	m.loopMaxRep = math.floor(itemLength / gridSize)	
 	
 	for i = 1, m.loopMaxRep do
+		seqLoopStartDrop.val2[i] = i	
 		seqLoopNumDrop.val2[i] = i
 		seqLoopLenDrop.val2[i] = i
-		seqLoopStartDrop.val2[i] = i-1
 	end
 	--[[
 m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN
@@ -1933,6 +1915,41 @@ seqLoopLenDrop, m.t_loopLenG)
 seqLoopNumDrop, m.t_loopRep)
 --]]
 end
+-- Update sequencer repeat state
+function UpdateSeqRepeat()
+	local debug = true
+	if debug or m.debug then ConMsg("\nUpdateSeqRepeat()") end
+	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
+	local gridSizeP = m.reaGrid * m.ppqn
+	if debug or m.debug then ConMsg("gridSizeP  = " .. tostring(gridSizeP)) end	
+	local itemLenP = GetItemLength()
+	if debug or m.debug then ConMsg("itemLenP   = " .. tostring(itemLenP)) end		
+	local itemLenG = math.floor(itemLenP / gridSizeP)
+	if debug or m.debug then ConMsg("itemLenG   = " .. tostring(itemLenG)) end	
+	local remLenG = itemLenG - m.loopStartG
+	if debug or m.debug then ConMsg("remLenG    = " .. tostring(remLenG)) end	 	
+	
+	-- set the start point lookup table
+	for i = 1, itemLenG do
+		seqLoopStartDrop.val2[i], m.t_loopStart[i] = i, i
+	end
+	
+	
+	--[[
+m.t_loopStart, m.t_loopRep, m.t_loopLenG
+seqLoopStartDrop.val1 = m.loopStartG -- loop start point in grid pos
+seqLoopStartDrop.val2[m.loopStartG]  -- loop start lookup table 
+seqLoopLenDrop.val1 = m.loopLenG     -- loop len in grid units
+seqLoopLenDrop.val2[m.loopLenG]      -- loop len lookup table
+seqLoopNumDrop.val1 = m.loopNum      -- loop amount integer
+seqLoopNumDrop.val2[m.loopNum]       -- loop amount lookup table
+--]]
+if m.seqRepeatF then InsertNotes() end
+
+	if debug or m.debug then ConMsg("m.loopStartG = " .. tostring(m.t_loopStart[m.loopStartG])) end
+	if debug or m.debug then ConMsg("m.loopLenG   = " .. tostring(m.loopLenG)) end
+	if debug or m.debug then ConMsg("m.loopNum    = " .. tostring(m.loopNum)) end	
+end 
 
 -- Reset sequencer grid sliders
 seqSldrText.onRClick = function()
