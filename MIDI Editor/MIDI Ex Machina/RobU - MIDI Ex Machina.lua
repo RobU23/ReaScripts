@@ -73,7 +73,7 @@ local p = require 'persistence' -- currently unused, i.e. no preset save, load, 
 --------------------------------------------------------------------------------
 m = {} -- all ex machina data
 -- user changeable defaults are marked with "(option)"
-m.debug = false
+m.debug = true
 -- window
 m.win_title = "RobU : MIDI Ex Machina - v1.3.2"; m.win_dockstate = 0
 m.win_x = 10; m.win_y = 10; m.win_w = 900; m.win_h = 280 -- window dimensions
@@ -117,6 +117,7 @@ m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
 m.seqShift = 0; m.seqShiftMin = -16; m.seqShiftMax = 16 -- shift notes left-right from sequencer
 m.loopStartG, m.loopLenG, m.loopNum, m.loopMaxRep = 0, 0, 0, 0 -- repeat values for GUI
 m.t_loopStart, m.t_loopNum, m.t_loopLen = {}, {}, {} -- repeat value tables
+m.loopGlueF = false
 
 -- euclidean generator
 m.eucF = true	-- generate euclid (option)
@@ -319,6 +320,7 @@ end
 function ClearTable(t)
 	local debug = false
 	if debug or m.debug then ConMsg("ClearTable()") end
+	
 	for k, v in pairs(t) do
 		t[k] = nil
 	end
@@ -327,6 +329,9 @@ end
 -- CopyTable(t1, t2) - copies note data from t1 to t2
 --------------------------------------------------------------------------------
 function CopyTable(t1, t2)
+	local debug = false
+	if debug or m.debug then ConMsg("CopyTable()") end
+	
 	ClearTable(t2)
 	local i = 1
 	while t1[i] do
@@ -345,12 +350,13 @@ end
 local function NewNoteBuf()
 	local debug = false
 	if debug or m.debug then ConMsg("NewNoteBuf()") end
+	
 	m.notebuf.i = m.notebuf.i + 1
 	m.notebuf.max = m.notebuf.max + 1
 	m.notebuf[m.notebuf.i] = {}
 	if debug or m.debug then
 		str = "created buffer\n"
-		str = str .. "buffer index = " .. tostring(m.notebuf.i) .. "\n"
+		str = str .. "buffer index = " .. tostring(m.notebuf.i)
 		ConMsg(str)
 	end
 	return m.notebuf[m.notebuf.i]
@@ -361,10 +367,11 @@ end
 local function GetNoteBuf()
 	local debug = false
 	if debug or m.debug then ConMsg("GetNoteBuf()") end
+	
 	if m.notebuf.i >= 1 then
 		if debug or m.debug then
 			str = "retrieved buffer\n"
-			str = str .. "buffer index = " .. tostring(m.notebuf.i) .. "\n"
+			str = str .. "buffer index = " .. tostring(m.notebuf.i)
 			ConMsg(str)
 		end
 		return m.notebuf[m.notebuf.i]
@@ -376,17 +383,18 @@ end
 local function UndoNoteBuf()
 	local debug = false
 	if debug or m.debug then ConMsg("UndoNoteBuf()") end
+	
 	if m.notebuf.i > 1 then
 		m.notebuf.i = m.notebuf.i -1
 		if debug or m.debug then
 			str = "removed buffer " .. tostring(m.notebuf.i + 1) .. "\n"
-			str = str .. "buffer index = " .. tostring(m.notebuf.i) .. "\n"
+			str = str .. "buffer index = " .. tostring(m.notebuf.i)
 			ConMsg(str)
 		end
 	else
 		if debug or m.debug then
 			str = "nothing to undo...\n"
-			str = str .. "buffer index = " .. tostring(m.notebuf.i) .. "\n"
+			str = str .. "buffer index = " .. tostring(m.notebuf.i)
 			ConMsg(str)
 		end
 	end
@@ -401,6 +409,7 @@ local function PurgeNoteBuf()
 		ConMsg("current idx = " .. tostring(m.notebuf.i))
 		ConMsg("max idx     = " .. tostring(m.notebuf.max))
 	end
+	
 	while m.notebuf.max > m.notebuf.i do
 		m.notebuf[m.notebuf.max] = nil
 		if debug or m.debug then ConMsg("purging buffer " .. tostring(m.notebuf.max))
@@ -415,6 +424,7 @@ end
 function GetItemLength()
 	local debug = false
 	if debug or m.debug then ConMsg("GetItemLength()") end
+	
 	mItem = reaper.GetSelectedMediaItem(0, 0)
 	mItemLen = reaper.GetMediaItemInfo_Value(mItem, "D_LENGTH")
 	mBPM, mBPI = reaper.GetProjectTimeSignature2(0)
@@ -424,12 +434,12 @@ function GetItemLength()
 	numBarsPerItem = numQNPerItem / 4
 	ItemPPQN = numQNPerItem * m.ppqn
 	if debug or m.debug then
-		ConMsg("ItemLen (ms)    = " .. mItemLen)
-		ConMsg("mBPM            = " .. mBPM)
-		ConMsg("MS Per QN       = " .. msPerQN)
-		ConMsg("Num of QN       = " .. numQNPerItem)
-		ConMsg("Num of Bar      = " .. numBarsPerItem)
-		ConMsg("Item size ppqn  = " .. ItemPPQN .. "\n")
+		--ConMsg("ItemLen (ms)    = " .. mItemLen)
+		--ConMsg("mBPM            = " .. mBPM)
+		--ConMsg("MS Per QN       = " .. msPerQN)
+		ConMsg("Num of QNs      = " .. numQNPerItem)
+		ConMsg("Num of Measures = " .. numBarsPerItem)
+		ConMsg("Itemlen (ppqn)  = " .. ItemPPQN)
 	end
 	return math.floor(ItemPPQN)
 end
@@ -439,6 +449,7 @@ end
 function GetReaperGrid(gridRad)
 	local debug = false
 	if debug or m.debug then ConMsg("GetReaperGrid()") end
+	
 	if m.activeTake then
 		m.reaGrid, __, __ = reaper.MIDI_GetGrid(m.activeTake) -- returns quarter notes
 		if gridRad then -- if a grid object was passed, update it
@@ -457,6 +468,7 @@ end
 function GetPermuteScaleFromTake(t)
 	local debug = false
 	if debug or m.debug then ConMsg("GetPermuteScaleFromTake()") end
+	
 	local i, j = 1, 0
 	if m.activeTake then
 		local __, num_notes, num_cc, num_sysex = reaper.MIDI_CountEvts(m.activeTake)
@@ -479,13 +491,13 @@ end
 --------------------------------------------------------------------------------
 function GetNotesFromTake()
 	local debug = false
-	if debug or m.debug then ConMsg("GetNotesFromTake()") end
+	if debug or m.debug then ConMsg("\nGetNotesFromTake()") end
+	
 	local i, t
 	if m.activeTake then
 		local _retval, num_notes, num_cc, num_sysex = reaper.MIDI_CountEvts(m.activeTake)
 		if num_notes > 0 then 
 			t = GetNoteBuf(); if t == nil then t = NewNoteBuf() end
-			local gridSize = GetReaperGrid()
 			local div, rem, noteLen
 			ClearTable(t)
 			for i = 1, num_notes do
@@ -518,6 +530,7 @@ end
 function DeleteNotes()
 	local debug = false
 	if debug or m.debug then ConMsg("DeleteNotes()") end
+	
 	local i, num_notes = 0, 0
 	if m.activeTake then
 		__, num_notes, __, __ = reaper.MIDI_CountEvts(m.activeTake)
@@ -545,6 +558,7 @@ end
 function GenProbTable(preProbTable, sliderTable, probTable)
 	local debug = false
 	if debug or m.debug then ConMsg("GenProbTable()") end
+	
 	local i, j, k, l = 1, 1, 1, 1
 	local floor = math.floor
 	ClearTable(probTable)
@@ -565,6 +579,7 @@ end
 function GenAccentTable(probTable, velSlider, probSlider)
 	local debug = false
 	if debug or m.debug then ConMsg("GenAccentTable()") end
+	
 	local i, j = 1, 1
 	ClearTable(probTable)
 	-- insert normal velocity
@@ -585,6 +600,7 @@ end
 function GenLegatoTable(probTable, probSlider)
 	local debug = false
 	if debug or m.debug then ConMsg("GenLegatoTable()") end
+	
 	local i, j = 1, 1
 	ClearTable(probTable)
 	-- no legato
@@ -605,6 +621,7 @@ end
 function GenOctaveTable(probTable, probSlider)
 	local debug = false
 	if debug or m.debug then ConMsg("GenOctaveTable()") end
+	
 	local i, j = 1, 1
 	ClearTable(probTable)
 	-- single octave
@@ -625,6 +642,7 @@ end
 function SetScale(scaleName, allScales, scale)
 	local debug = false
 	if debug or m.debug then ConMsg("SetScale()") end
+	
 	ClearTable(scale)
 	for i = 1, #allScales, 1 do
 		if scaleName == allScales[i].name then
@@ -663,6 +681,7 @@ end
 function UpdateSliderLabels(sliderTable, preProbTable)
 	local debug = false
 	if debug or m.debug then ConMsg("UpdateSliderLabels()") end
+	
 	for k, v in pairs(sliderTable) do
 		if preProbTable[k] then -- if there's a Scale note
 			-- set the slider to the note name
@@ -680,22 +699,26 @@ end
 function GetUniqueNote(tNotes, noteIdx, noteProbTable, octProbTable)
 	local debug = false
 	if debug and m.debug then ConMsg("GetUniqueNote()") end
+	
 	newNote = m.root + noteProbTable[math.random(1, #noteProbTable)]	
 	if m.rndOctX2F and not m.rndPermuteF then
 		newNote = newNote + octProbTable[math.random(1, #octProbTable)]
 	end
+	
 	if #m.dupes == 0 then -- dupe table is empty
 		m.dupes.i = 1;  m.dupes[m.dupes.i] = {} -- add note to the dupe table
 		m.dupes[m.dupes.i].srtpos	= tNotes[noteIdx][3]
 		m.dupes[m.dupes.i].endpos	= tNotes[noteIdx][4]
 		m.dupes[m.dupes.i].midi		= newNote
 		return newNote
+	
 	elseif tNotes[noteIdx][3] >= m.dupes[m.dupes.i].srtpos
 		and tNotes[noteIdx][3] < m.dupes[m.dupes.i].endpos then -- note overlaps with previous note
 		m.dupes.i = m.dupes.i + 1; m.dupes[m.dupes.i] = {} -- add note to dupe table
 		m.dupes[m.dupes.i].srtpos = tNotes[noteIdx][3]
 		m.dupes[m.dupes.i].endpos = tNotes[noteIdx][4]
 		unique = false
+		
 		while not unique do		
 			newNote = m.root + noteProbTable[math.random(1,#noteProbTable)]
 			if m.rndOctX2F and not m.rndPermuteF then
@@ -708,6 +731,7 @@ function GetUniqueNote(tNotes, noteIdx, noteProbTable, octProbTable)
 		end -- not unique
 			m.dupes[m.dupes.i].midi = newNote -- update dupe table
 			return newNote
+	
 	else -- note does not overlap with previous note
 		m.dupes = {}; m.dupes.i = 1;  m.dupes[m.dupes.i] = {} -- reset dupe table
 		m.dupes[m.dupes.i].srtpos	= tNotes[noteIdx][3]
@@ -721,12 +745,14 @@ end
 --------------------------------------------------------------------------------
 function RandomiseNotesPoly(noteProbTable)
 	local debug = false
-	if debug or m.debug then ConMsg("RandomiseNotesPoly()") end
+	if debug or m.debug then ConMsg("\nRandomiseNotesPoly()") end
+	
 	m.dupes.i = 1
 	local  i = 1
 	local t1, t2 = GetNoteBuf(), NewNoteBuf()
 	CopyTable(t1, t2)
 	if debug or m.debug then PrintNotes(t1) end	
+	
 	while t2[i] do
 		if t2[i][1] == true or m.rndAllNotesF then -- if selected, or all notes flag is true
 			if i == 1 and m.rndFirstNoteF then -- if selected, the first not is always root of scale
@@ -737,6 +763,7 @@ function RandomiseNotesPoly(noteProbTable)
 		end
 		i = i + 1
 	end -- while t1[i]
+	
 	PurgeNoteBuf()
 	if debug or m.debug then PrintNotes(t2) end
 	InsertNotes()
@@ -750,7 +777,8 @@ end
 --------------------------------------------------------------------------------
 function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 	local debug = false
-	if debug or m.debug then ConMsg("GenSequence()") end
+	if debug or m.debug then ConMsg("\nGenSequence()") end
+	
 	local t = NewNoteBuf()
 	GetReaperGrid() -- populates m.reaGrid
 	local itemPos = 0
@@ -759,6 +787,7 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 	local noteStart, noteEnd, noteLen, noteVel, notLeg = 0, 0, 0, 0, 0
 	local newNote = 0
 	local noteCount = 0; restCount = 0
+
 	while itemPos < itemLength do
 	
 		if m.seqFirstNoteF and noteCount == 0 then  -- handle first note flag
@@ -773,6 +802,7 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 		if newNote == -1 then
 			itemPos = itemPos + gridSize
 			restCount = restCount + 1
+		
 		else
 			noteStart = itemPos
 			noteLen = newNote * m.ppqn
@@ -803,6 +833,7 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 			t[noteCount][9] = noteLeg             -- legato
 			
 		end -- newNote
+		
 	end -- itemPos < itemLength
 	if debug or m.debug then PrintNotes(t) end
 	PurgeNoteBuf()
@@ -814,7 +845,8 @@ end
 --------------------------------------------------------------------------------
 function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 	local debug = false
-	if debug or m.debug then ConMsg("GenBjorklund()") end
+	if debug or m.debug then ConMsg("\nGenBjorklund()") end
+	
 	local floor = math.floor
 	local t, t2 = NewNoteBuf(), GetNoteBuf()
 	CopyTable(t2, t)
@@ -832,12 +864,14 @@ function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 	local pattern = b.generate(pulse, step)
 	local rot = floor(rotation.val1 + 0.5)
 	local idx = (-rot) + 1; idx = Wrap(idx, step)
+	
 	while itemPos < itemLength do
 		if pattern[idx] then
 			noteStart = itemPos
 			noteLen = gridSize
 			noteEnd = noteStart + noteLen
 			itemPos = itemPos + noteLen
+			
 			if m.eucAccentF then  -- handle accent flag
 				noteVel = accProbTable[math.random(1, #accProbTable)]
 			else
@@ -859,9 +893,11 @@ function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 			itemPos = itemPos + gridSize
 			restCount = restCount + 1
 		end
+		
 		idx = idx + 1
 		idx = Wrap(idx, step)
 	end
+	
 	PurgeNoteBuf()
 	--if not m.eucRndNotesF then InsertNotes() end
 	InsertNotes()
@@ -871,7 +907,8 @@ end
 --------------------------------------------------------------------------------
 function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 	local debug = false
-	if debug or m.debug then ConMsg("GenNoteAttributes()") end
+	if debug or m.debug then ConMsg("\nGenNoteAttributes()") end
+	
 	if not accF and not legF then return end
 	local t1, t2 = GetNoteBuf(), NewNoteBuf()
 	local gridSize = GetReaperGrid()
@@ -879,6 +916,7 @@ function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 	local div, rem, noteLen
 	CopyTable(t1, t2)
 	if debug and m.debug then PrintNotes(t2) end
+	
 	for k, v in pairs(t2) do
 		if v[1] then -- selected
 			if accF then -- handle accent flag (8 = velocity)
@@ -890,8 +928,8 @@ function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 				end -- legF     
 			end -- legF ~= 1
 		end -- selected 
-
 	end -- for k, v t2
+	
 	if debug and m.debug then PrintNotes(t2) end
 	PurgeNoteBuf()
 	InsertNotes()
@@ -901,225 +939,141 @@ end
 --------------------------------------------------------------------------------
 function InsertNotes()
 	local debug = false
-	if debug or m.debug then ConMsg("\nInsertNotes()") end
+	if debug or m.debug then ConMsg("InsertNotes()") end
+	
 	local i = 1
 	if m.activeTake then
 		local gridSize = math.floor(m.reaGrid * m.ppqn)
 		local itemLenP = GetItemLength()	
 		local noteShift = math.floor(m.seqShift * gridSize)
 		local t1 = GetNoteBuf()	
-		if debug then PrintNotes(t1) end
 
 		-- note shifter
-		if debug then ConMsg("Shifting...") end
+		if debug or m.debug then ConMsg("Shifting...") end
 		local t2 = {} -- temp table for note shifter (no undo)
-		if debug or m.debug then ConMsg("itemLenP = " .. tostring(itemLenP)) end
-		if debug or m.debug then ConMsg("gridSize = " .. tostring(gridSize)) end
-		if debug or m.debug then ConMsg("noteShift = " .. tostring(noteShift)) end
 		CopyTable(t1, t2)		
 		for k, v in pairs(t2) do
-			if debug or m.debug then ConMsg("idx =\t" .. tostring(k)) end
-			if debug or m.debug then ConMsg("orig start =\t" .. tostring(v[3]) .. " - orig end =\t" .. tostring(v[4])) end
 			v[3] = v[3] + noteShift
 			v[4] = v[4] + noteShift
-			if debug or m.debug then ConMsg("shift start =\t" .. tostring(v[3]) .. " - shift end =\t" .. tostring(v[4])) end
 			if v[3] < 0 then
 				v[3] = itemLenP + v[3]
 				v[4] = itemLenP + v[4]
 				if v[4] > itemLenP then v[4] = itemLenP end
-				if debug or m.debug then ConMsg("neg start =\t" .. tostring(v[3]) .. " - neg end =\t" .. tostring(v[4])) end
 			elseif v[3] >= itemLenP then
 				v[3] = v[3] - itemLenP
 				v[4] = v[4] - itemLenP
-				if debug or m.debug then ConMsg("pos start =\t" .. tostring(v[3]) .. " - poa end =\t" .. tostring(v[4])) end
 			end
 		end -- for k, v t2
 
 		-- note repeater
 		if m.seqRepeatF then
-			if debug then ConMsg("Repeating...") end
+			if debug or m.debug then ConMsg("Repeating...") end
 			DeleteNotes()
-			t3 = {} -- temp table for note repeater (no undo)
+			t3 = {} -- temp table for note repeater (for glueing)
 			local loopStartP = (m.loopStartG -1) * gridSize
 			local loopLenP = m.loopLenG * gridSize
 			local loopEndP = loopStartP + loopLenP
 			local loopNum = m.loopNum
-			local noteEnd
-			local kOff = 0
+			local i = 1
 			local writeOffP = 0
 			if loopStartP > 0 then writeOffP = -loopStartP else writeOffP = 0 end
-			
-			if debug or m.debug then ConMsg("itemLenP   = " .. tostring(itemLenP)) end
-			if debug or m.debug then ConMsg("loopStartP = " .. tostring(loopStartP)) end
-			if debug or m.debug then ConMsg("loopLenP   = " .. tostring(loopLenP)) end
-			if debug or m.debug then ConMsg("loopEndP   = " .. tostring(loopEndP)) end
-			if debug or m.debug then ConMsg("loopNum   = " .. tostring(loopNum)) end
-			if debug or m.debug then ConMsg("writeOffP  = " .. tostring(writeOffP)) end
-			
-			-- pre-repeat start
-			if debug or m.debug then ConMsg("\nStart pre-repeat...") end
+
+			-- pre-repeat
 			for k, v in pairs(t2) do 
 				if v[3] >= 0 and v[3] < loopStartP then
-					t3[k] = {}
-					t3[k][1] = v[1] -- selected
-					t3[k][2] = v[2] -- muted
-					t3[k][3] = v[3] -- startppqn					
-					t3[k][4] = v[4] -- endppqn
-					if not t3[k][9] then t3[k][4] = t3[k][4] - m.legato end -- handle the legatolessness
-					t3[k][6] = v[6] -- channel
-					t3[k][7] = v[7] -- pitch
-					t3[k][8] = v[8] -- vel
-					if debug or m.debug then ConMsg("a - idx = " .. tostring(k) .. " - Start = " .. tostring(v[3]) .. " - End = " .. tostring(v[4])) end
-					if debug or m.debug then ConMsg("b - idx = " .. tostring(k) .. " - Start = " .. tostring(t3[k][3]) .. " - End = " .. tostring(t3[k][4])) end
-					reaper.MIDI_InsertNote(m.activeTake, t3[k][1], t3[k][2], t3[k][3], t3[k][4], t3[k][6], t3[k][7], t3[k][8], false)
-					kOff = kOff + 1
-					--if debug or m.debug then ConMsg("kOff  = " .. tostring(kOff)) end
+					t3[i] = {}
+					t3[i][1] = v[1] -- selected
+					t3[i][2] = v[2] -- muted
+					t3[i][3] = v[3] -- startppqn					
+					t3[i][4] = v[4] -- endppqn
+					if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
+					t3[i][5] = v[5] -- length
+					t3[i][6] = v[6] -- channel
+					t3[i][7] = v[7] -- pitch
+					t3[i][8] = v[8] -- vel
+					t3[i][9] = v[9] -- legato
+					reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
+					i = i + 1
 				end
 			end -- k, v in pairs(t2) - pre-repeat
 			writeOffP = writeOffP + loopStartP
 			
-			-- repeat start
-			if debug or m.debug then ConMsg("\nStart repeater...") end
+			-- repeat
 			while loopNum > 0 do
-				if debug or m.debug then ConMsg("\nloopNum  = " .. tostring(loopNum)) end
-				if debug or m.debug then ConMsg("writeOffP   = " .. tostring(writeOffP)) end
 				for k, v in pairs(t2) do
 					if v[3] >= loopStartP and v[3] < loopEndP then
-						t3[k + kOff] = {}
-						t3[k + kOff][1] = v[1] -- selected 
-						t3[k + kOff][2] = v[2] -- muted
-						t3[k + kOff][3] = v[3] + writeOffP -- startppqn
-						if v[4] > loopEndP then -- endppqn
-							t3[k + kOff][4] = loopEndP + writeOffP
-						else 
-							t3[k + kOff][4] = v[4] + writeOffP
-						end
-						if not t3[k + kOff][9] then t3[k + kOff][4] = t3[k + kOff][4] - m.legato end -- handle the legatolessness
-						t3[k + kOff][6] = v[6] -- channel
-						t3[k + kOff][7] = v[7] -- pitch
-						t3[k + kOff][8] = v[8] -- vel
-						if debug or m.debug then ConMsg("a - idx = " .. tostring(k) .. " - Start = " .. tostring(v[3]) .. " - End = " .. tostring(v[4])) end
-						if debug or m.debug then ConMsg("b - idx = " .. tostring(k + kOff) .. " - Start = " .. tostring(t3[k + kOff][3]) .. " - End = " .. tostring(t3[k + kOff][4])) end
-						reaper.MIDI_InsertNote(m.activeTake, t3[k + kOff][1], t3[k + kOff][2], t3[k + kOff][3], t3[k + kOff][4], t3[k + kOff][6], t3[k + kOff][7], t3[k + kOff][8], false)
-						
+						t3[i] = {}
+						t3[i][1] = v[1] -- selected 
+						t3[i][2] = v[2] -- muted
+						t3[i][3] = v[3] + writeOffP -- startppqn
+						if v[4] > loopEndP then t3[i][4] = loopEndP + writeOffP else t3[i][4] = v[4] + writeOffP end -- endppqn
+						if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
+						t3[i][5] = v[5] -- length
+						t3[i][6] = v[6] -- channel
+						t3[i][7] = v[7] -- pitch
+						t3[i][8] = v[8] -- vel
+						t3[i][9] = v[9] -- legato
+						reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
+						i = i + 1
 					end -- if v[3]
+					
 				end -- for k, v t3 - repeat
 				loopNum = loopNum - 1
 				writeOffP = writeOffP + loopLenP
 			end -- while loopNum > 0
 
-			-- post-repeat start
-			if debug or m.debug then ConMsg("\nStart post-repeat...") end
-			if debug or m.debug then ConMsg("writeOffP   = " .. tostring(writeOffP)) end
-
-			kOff = kOff + 1
-			local written = loopStartP + (loopLenP * m.loopNum)
-				if debug or m.debug then ConMsg("written  = " .. tostring(written)) end			
-			local remLenP = itemLenP - written
-				if debug or m.debug then ConMsg("remLenP  = " .. tostring(remLenP)) end			
+			-- post-repeat
+			local written = loopStartP + (loopLenP * m.loopNum)	
+			local remLenP = itemLenP - written	
 			local readStartP = loopStartP + loopLenP
-				if debug or m.debug then ConMsg("readStartP  = " .. tostring(readStartP)) end			
 			local readEndP = readStartP + remLenP
-				if debug or m.debug then ConMsg("readEndP = " .. tostring(readEndP)) end
 			local writeOffP = written - readStartP
-				if debug or m.debug then ConMsg("writeOffP = " .. tostring(writeOffP)) end
 			
 			for k, v in pairs(t2) do
 				if v[3] >= readStartP and v[3] < readEndP then
-						t3[k + kOff] = {}
-						t3[k + kOff][1] = v[1] -- selected 
-						t3[k + kOff][2] = v[2] -- muted
-						t3[k + kOff][3] = v[3] + writeOffP -- startppqn
-						if v[4] > itemLenP then -- endppqn
-							t3[k + kOff][4] = itemLenP
-						else 
-							t3[k + kOff][4] = v[4] + writeOffP
-						end
-					if not t3[k + kOff][9] then t3[k + kOff][4] = t3[k + kOff][4] - m.legato end -- handle the legatolessness
-					t3[k + kOff][6] = v[6] -- channel
-					t3[k + kOff][7] = v[7] -- pitch
-					t3[k + kOff][8] = v[8] -- vel
-					if debug or m.debug then ConMsg("a - idx = " .. tostring(k) .. " - Start = " .. tostring(v[3]) .. " - End = " .. tostring(v[4])) end
-					if debug or m.debug then ConMsg("b - idx = " .. tostring(k + kOff) .. " - Start = " .. tostring(t3[k + kOff][3]) .. " - End = " .. tostring(t3[k + kOff][4])) end
-					reaper.MIDI_InsertNote(m.activeTake, t3[k + kOff][1], t3[k + kOff][2], t3[k + kOff][3], t3[k + kOff][4], t3[k + kOff][6], t3[k + kOff][7], t3[k + kOff][8], false)
-					kOff = kOff + 1
-					if debug or m.debug then ConMsg("kOff  = " .. tostring(kOff)) end
+					t3[i] = {}
+					t3[i][1] = v[1] -- selected 
+					t3[i][2] = v[2] -- muted
+					t3[i][3] = v[3] + writeOffP -- startppqn
+					if v[4] > itemLenP then t3[i][4] = itemLenP else t3[i][4] = v[4] + writeOffP end -- endppqn
+					if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
+					t3[i][5] = v[5] -- channel
+					t3[i][6] = v[6] -- channel
+					t3[i][7] = v[7] -- pitch
+					t3[i][8] = v[8] -- vel
+					t3[i][9] = v[9] -- legato
+					reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
+					i = i + 1
 				end			
 			end -- k, v in pairs(t2) - post-repeat
 			
 			reaper.MIDI_Sort(m.activeTake)
 			reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+			
 		else -- not m.seqRepeatF
+			if debug or m.debug then ConMsg("No repeat...") end
 			DeleteNotes()
 			
-			for k, v in pairs(t2) do
-				if not v[9] then v[4] = v[4] - m.legato end-- handle the legatolessness
-				reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)
-				--1=selected, 2=muted, 3=startppq, 4=endppq, 5=len, 6=chan, 7=pitch, 8=vel, noSort)		
-			end -- for k, v t2
+			if m.loopGlueF then
+				if debug or m.debug then ConMsg("Glueing...") end	
+				t4 = NewNoteBuf(); CopyTable(t3, t4)
+				if debug or m.debug then PrintNotes(t4) end
+				for k, v in pairs(t4) do
+					reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)
+				end			
+				m.loopGlueF = false
+			
+			else -- not glueing
+				if debug or m.debug then ConMsg("no glueing, inserting shift table (t2)") end
+				for k, v in pairs(t2) do -- use the post-shifter table
+					if not v[9] then v[4] = v[4] - m.legato end -- handle legatolessness
+					reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)	
+				end -- for k, v t2
+			end -- m.loopGlueF
 			
 			reaper.MIDI_Sort(m.activeTake)
 			reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
 		end -- m.seqRepeatF
-	else
-		if debug or m.debug then ConMsg("No Active Take") end
-	end -- m.activeTake
-end
---------------------------------------------------------------------------------
--- InsertNotesWithShift(note_buffer) - insert notes in the active take
---------------------------------------------------------------------------------
-function InsertNotesWithShift()
-	local debug = false
-	if debug or m.debug then ConMsg("\nInsertNotes()") end
-	DeleteNotes()
-	local i = 1
-	if m.activeTake then
-		local gridSize = m.reaGrid * m.ppqn
-		local itemLength = GetItemLength()	
-		local noteShift = m.seqShift * gridSize
-		local t1 = GetNoteBuf()	
-		local t2 = {} -- for note shifting
-		CopyTable(t1, t2)
-		for k, v in pairs(t2) do -- do note shifting
-			v[3] = v[3] + noteShift
-			v[4] = v[4] + noteShift			
-			if v[3] < 0 then
-				v[3] = itemLength + v[3]
-				v[4] = itemLength + v[4]	
-					if v[4] > itemLength then v[4] = itemLength + m.legato end
-			elseif v[3] >= itemLength then
-				v[3] = v[3] - itemLength
-				v[4] = v[4] - itemLength				
-			end
-		end
-		while t2[i] do
-			reaper.MIDI_InsertNote(m.activeTake, t2[i][1], t2[i][2], t2[i][3], t2[i][4], t2[i][6], t2[i][7], t2[i][8], false)
-			--1=selected, 2=muted, 3=startppq, 4=endppq, 5=len, 6=chan, 7=pitch, 8=vel, noSort)		
-			i = i + 1
-		end -- while t2[i]
-		reaper.MIDI_Sort(m.activeTake)
-		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
-	else
-		if debug or m.debug then ConMsg("No Active Take") end
-	end -- m.activeTake
-end
---------------------------------------------------------------------------------
--- InsertNotesOrig(note_buffer) - insert notes in the active take
---------------------------------------------------------------------------------
-function InsertNotesOrig()
-	local debug = false
-	if debug or m.debug then ConMsg("InsertNotes()") end
-	DeleteNotes()
-	local i = 1
-	if m.activeTake then
-		local t1 = GetNoteBuf()
-		while t1[i] do
-			reaper.MIDI_InsertNote(m.activeTake, t1[i][1], t1[i][2], t1[i][3], t1[i][4], t1[i][6], t1[i][7], t1[i][8], false)
-			--1=selected, 2=muted, 3=startppq, 4=endppq, 5=len, 6=chan, 7=pitch, 8=vel, noSort)		
-			i = i + 1
-		end -- while t1[i]
-		reaper.MIDI_Sort(m.activeTake)
-		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
 	else
 		if debug or m.debug then ConMsg("No Active Take") end
 	end -- m.activeTake
@@ -1130,9 +1084,11 @@ end
 function PrintNotes(t) -- debug code
 	local debug = false
 	if debug or m.debug then ConMsg("PrintNotes()") end
+	
 	if not t then return end
 	local i = 1
 	local str = "sel \t mut \t s_ppq \t e_ppq \t leng \t chan \t pitch \t vel \t leg \n"
+	
 	while t[i] do
 		j = 1
 		while (t[i][j] ~= nil)   do	
@@ -1142,6 +1098,7 @@ function PrintNotes(t) -- debug code
 		str = str .. "\n"
 		i = i + 1
 	end -- while t[i]
+	
 	str = str .. "\n"
 	if debug or m.debug then ConMsg(str) end
 end
@@ -1151,11 +1108,14 @@ end
 function PrintTable(t) -- debug code
 	local debug = false
 	if debug or m.debug then ConMsg("PrintTable()") end
+	
 	if not t then return end
 	local str = ""
+	
 	for k, v in pairs(t) do
 			str = str .. tostring(v) .. "\t"
 	end	
+	
 	str = str .. "\n"
 	if debug or m.debug then ConMsg(str) end
 end
@@ -1165,6 +1125,7 @@ end
 function ShowMessage(tb, msgNum)
 	local debug = false
 	if debug and m.debug then ConMsg("ShowMessage() ") end
+	
 	if msgNum == 0 then
 		tb.tab = (1 << 9)  
 		tb.label = ""
@@ -1331,7 +1292,8 @@ local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqShi
 -- Window zoom droplist
 zoomDrop.onLClick = function() -- window scaling
 	local debug = false
-	if debug or m.debug then ConMsg("\nzoomDrop.onLClick()") end
+	if debug or m.debug then ConMsg("zoomDrop.onLClick()") end
+	
 	    if zoomDrop.val1 ==  1 then e.gScale = 0.7
 	elseif zoomDrop.val1 ==  2 then e.gScale = 0.8
 	elseif zoomDrop.val1 ==  3 then e.gScale = 0.9
@@ -1343,6 +1305,7 @@ zoomDrop.onLClick = function() -- window scaling
 	elseif zoomDrop.val1 ==  9 then e.gScale = 1.8
 	elseif zoomDrop.val1 == 10 then e.gScale = 2.0
 	end
+	
 	if debug or m.debug then ConMsg("zoom = " .. tostring(e.gScale)) end
 	-- Save state, close and reopen GFX window
 	if not pExtState.win_x then
@@ -1357,7 +1320,8 @@ end
 -- Layer 1 button
 layerBtn01.onLClick = function() -- randomiser
 	local debug = false
-	if debug or m.debug then ConMsg("\nlayerBtn01.onLClick() (note randomiser)") end
+	if debug or m.debug then ConMsg("layerBtn01.onLClick() (note randomiser)") end
+	
 	e.gActiveLayer = 1 
 	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_green)
 	winText.r, winText.g, winText.b, winText.a = table.unpack(e.col_green)
@@ -1377,7 +1341,8 @@ end
 -- Layer 2 button
 layerBtn02.onLClick = function() -- sequencer
 	local debug = false
-	if debug or m.debug then ConMsg("\nlayerBtn02.onLClick() (sequencer)") end
+	if debug or m.debug then ConMsg("layerBtn02.onLClick() (sequencer)") end
+	
 	e.gActiveLayer = 2
 	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_yellow)
 	winText.r, winText.g, winText.b, winText.a = table.unpack(e.col_yellow)
@@ -1397,7 +1362,8 @@ end
 -- Layer 3 button
 layerBtn03.onLClick = function() -- euclidean
 	local debug = false
-	if debug or m.debug then ConMsg("\nlayerBtn03.onLClick() (euclid)") end
+	if debug or m.debug then ConMsg("layerBtn03.onLClick() (euclid)") end
+	
 	e.gActiveLayer = 3
 	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_orange)
 	winText.r, winText.g, winText.b, winText.a = table.unpack(e.col_orange)
@@ -1417,7 +1383,8 @@ end
 -- Layer 4 button
 layerBtn04.onLClick = function() -- options
 	local debug = false
-	if debug or m.debug then ConMsg("\nlayerBtn04.onLClick() (options)") end
+	if debug or m.debug then ConMsg("layerBtn04.onLClick() (options)") end
+	
 	e.gActiveLayer = 4
 	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_grey5)
 	winText.r, winText.g, winText.b, winText.a = table.unpack(e.col_grey5)
@@ -1437,7 +1404,8 @@ end
 -- Undo button
 undoBtn.onLClick = function() -- undo
 	local debug = false
-	if debug or m.debug then ConMsg("\nundoBtn.onLClick()") end
+	if debug or m.debug then ConMsg("undoBtn.onLClick()") end
+	
 	UndoNoteBuf()
 	InsertNotes()
 	PrintNotes(m.notebuf[m.notebuf.i])
@@ -1445,7 +1413,8 @@ end
 -- Redo button
 redoBtn.onLClick = function() -- redo
 	local debug = false
-	if debug or m.debug then ConMsg("\nredoBtn.onLClick()") end
+	if debug or m.debug then ConMsg("redoBtn.onLClick()") end
+	
 	if m.notebuf[m.notebuf.i + 1] ~= nil then
 		--PrintNotes(m.notebuf[m.notebuf.i + 1])
 		m.notebuf.i = m.notebuf.i + 1
@@ -1459,6 +1428,7 @@ end
 function SetDefaultWindowOpts()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultWinOpts()") end
+	
 	if pExtState.zoomDrop then
 		zoomDrop.val1 = pExtState.zoomDrop
 	end
@@ -1470,6 +1440,9 @@ function SetDefaultWindowOpts()
 end
 -- Set default layer
 function SetDefaultLayer()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultLayer()") end
+	
 	if pExtState.activeLayer then 
 		    if pExtState.activeLayer == 1 then layerBtn01.onLClick()
 		elseif pExtState.activeLayer == 2 then layerBtn02.onLClick()
@@ -1486,6 +1459,7 @@ end
 randomBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nrandomBtn.onLClick()") end
+	
 	if m.activeTake then
 		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift
 		seqShiftVal.label = tostring(m.seqShift)
@@ -1496,9 +1470,11 @@ randomBtn.onLClick = function()
 		RandomiseNotesPoly(m.noteProbTable)
 		-- set project ext state	
 		pExtState.noteSliders = {}
+		
 		for k, v in pairs(t_noteSliders) do
 			pExtState.noteSliders[k] = v.val1
 		end
+		
 		pExtState.rndOctProb = octProbSldr.val1
 		pExtSaveStateF = true
 	end --m.activeTake
@@ -1506,7 +1482,8 @@ end
 -- Randomiser options toggle logic
 noteOptionsCb.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nnoteOptionsCb.onLClick()") end
+	if debug or m.debug then ConMsg("noteOptionsCb.onLClick()") end
+	
 	m.rndAllNotesF =  noteOptionsCb.val1[1] == 1 and true or false -- All / Sel Notes
 	m.rndFirstNoteF = noteOptionsCb.val1[2] == 1 and true or false -- 1st Note Root
 	m.rndOctX2F =     noteOptionsCb.val1[3] == 1 and true or false -- Octave X2
@@ -1517,7 +1494,8 @@ end
 -- Root Key droplist
 keyDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nkeyDrop.onLClick()") end
+	if debug or m.debug then ConMsg("keyDrop.onLClick()") end
+	
 	m.key = keyDrop.val1
 	m.root = SetRootNote(m.oct, m.key)	
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
@@ -1529,7 +1507,8 @@ end
 -- Octave droplist
 octDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\noctDrop.onLClick()") end
+	if debug or m.debug then ConMsg("octDrop.onLClick()") end
+	
 	m.oct = octDrop.val1
 	m.root = SetRootNote(m.oct, m.key)
 	-- set project ext state	
@@ -1540,7 +1519,7 @@ end
 -- Scale droplist
 scaleDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nscaleDrop.onLClick()") end
+	if debug or m.debug then ConMsg("scaleDrop.onLClick()") end
 	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
 	if m.rndPermuteF then 
 		noteOptionsCb.val1[1] = 0
@@ -1556,6 +1535,7 @@ end
 function SetDefaultScaleOpts()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultScaleOpts()") end
+	
 	-- if key saved in project state, load it
 	if pExtState.key then 
 		m.key = math.floor(tonumber(pExtState.key))
@@ -1588,12 +1568,14 @@ end
 function SetDefaultRndOptions()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultRndOptions()") end
+	
 	-- if randomiser options were saved to project state, load them
 	if pExtState.noteOptionsCb then
 		m.rndAllNotesF =  pExtState.noteOptionsCb[1] == true and true or false 
 		m.rndFirstNoteF = pExtState.noteOptionsCb[2] == true and true or false
 		m.rndOctX2F =     pExtState.noteOptionsCb[3] == true and true or false
 		end
+
 	-- set randomiser options using defaults, or loaded project state
 	noteOptionsCb.val1[1] = (true and m.rndAllNotesF) and 1 or 0 -- all notes
 	noteOptionsCb.val1[2] = (true and m.rndFirstNoteF) and 1 or 0 -- first note root
@@ -1603,6 +1585,7 @@ end
 function SetDefaultRndSliders()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultRndSliders()") end
+	
 	-- if randomiser sliders were saved to project state, load them
 	if pExtState.noteSliders then
 		for k, v in pairs(t_noteSliders) do
@@ -1622,8 +1605,12 @@ end
 
 -- Reset note probability sliders
 probSldrText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("probSldrText.onRClick()") end
+	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Note Sliders")
+	
 	if result == 1 then 
 		for k, v in pairs(t_noteSliders) do -- reset the sliders
 			if v.label ~= "" then v.val1 = 1 end
@@ -1638,8 +1625,12 @@ probSldrText.onRClick = function()
 end
 -- Reset octave probability slider
 octProbText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("octProbText.onRClick()") end
+	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Octave Slider")
+	
 	if result == 1 then 
 		octProbSldr.val1 = m.rndOctProb
 		if pExtState.rndOctProb then -- write the new proj ext state
@@ -1656,11 +1647,13 @@ end
 sequenceBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nsequenceBtn.onLClick()") end
+	
 	if m.activeTake then 
 		m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Turn off repeat
 		InsertNotes()
 		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
 		seqShiftVal.label = tostring(m.seqShift)	
+		
 		if m.seqF then
 			SetSeqGridSizes(t_seqSliders)
 			GenProbTable(m.preSeqProbTable, t_seqSliders, m.seqProbTable)
@@ -1671,15 +1664,18 @@ sequenceBtn.onLClick = function()
 			if m.seqRndNotesF then 
 				randomBtn.onLClick() -- call RandomiseNotes
 			end
+			
 		else -- not m.seqF
 			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
 			GenLegatoTable(m.legProbTable, seqLegProbSldr)
 			GetNotesFromTake() 
 			GenNoteAttributes(m.seqAccentF, m.accProbTable, seqAccRSldr, m.seqLegatoF, m.legProbTable)  
+			
 			if m.seqRndNotesF then
 				randomBtn.onLClick() -- call RandomiseNotes
 			end
 		end  -- m.seqF
+		
 		-- set project ext state
 		if seqGridRad.val1 == 1 then -- 1/16 grid
 			pExtState.seqGrid16 = {}
@@ -1687,18 +1683,21 @@ sequenceBtn.onLClick = function()
 				pExtState.seqGrid16[k] = v.val1
 			end
 		end
+		
 		if seqGridRad.val1 == 2 then -- 1/8 grid
 			pExtState.seqGrid8 = {}
 			for k, v in pairs (t_seqSliders) do
 				pExtState.seqGrid8[k] = v.val1
 			end
-		end		
+		end
+		
 		if seqGridRad.val1 == 3 then -- 1/4 grid
 			pExtState.seqGrid4 = {}
 			for k, v in pairs (t_seqSliders) do
 				pExtState.seqGrid4[k] = v.val1
 			end
-		end	
+		end
+		
     m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Turn on repeat
 		InsertNotes()
 		pExtState.seqAccRSldrLo = seqAccRSldr.val1
@@ -1713,16 +1712,19 @@ end
 -- Sequencer options toggle logic 
 seqOptionsCb.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nseqOptionsCb.onLClick()") end
+	if debug or m.debug then ConMsg("seqOptionsCb.onLClick()") end
+	
 	m.seqF = 					seqOptionsCb.val1[1] == 1 and true or false -- Generate
 	m.seqFirstNoteF = seqOptionsCb.val1[2] == 1 and true or false -- 1st Note Always
 	m.seqAccentF = 		seqOptionsCb.val1[3] == 1 and true or false -- Accent
 	m.seqLegatoF = 		seqOptionsCb.val1[4] == 1 and true or false -- Legato
 	m.seqRndNotesF = 	seqOptionsCb.val1[5] == 1 and true or false -- Randomise Notes
 	m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Repeat
+	
 	if pExtState.seqOptionsCb then
 		if pExtState.seqOptionsCb[6] ~= m.seqRepeatF then InsertNotes() end
 	end
+	
 	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
 	pExtSaveStateF = true
 	if debug or m.debug then PrintTable(seqOptionsCb.val1) end
@@ -1731,7 +1733,8 @@ end
 -- Sequencer grid radio button
 seqGridRad.onLClick = function() -- change grid size
 	local debug = false
-	if debug or m.debug then ConMsg("\nseqGridRad.onLClick()") end
+	if debug or m.debug then ConMsg("seqGridRad.onLClick()") end
+	
 	if m.activeTake then
 	
 		if seqGridRad.val1 == 1 then -- 1/16 grid
@@ -1776,7 +1779,6 @@ seqGridRad.onLClick = function() -- change grid size
 		seqShiftVal.label = tostring(m.seqShift)
 		GetNotesFromTake() -- force an undo point on grid change
 		--InsertNotes()
-
 		pExtSaveStateF = true
 		
 	end -- m.activeTake
@@ -1784,27 +1786,37 @@ end
 
 -- Sequencer shift left
 seqShiftLBtn.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("seqShiftLBtn()") end
+	
 	local gridSize = m.reaGrid * m.ppqn
 	local itemLength = GetItemLength()
 	m.seqShiftMin = -(math.floor(itemLength / gridSize)-1)
+	
 	if m.seqShift <= m.seqShiftMin then
 		m.seqShift = 0
 	else
 		m.seqShift = m.seqShift - 1
 	end
+	
 	seqShiftVal.label = tostring(m.seqShift)
 	InsertNotes()
 end
 -- Sequencer shift right
 seqShiftRBtn.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("seqShiftRBtn()") end
+	
 	local gridSize = m.reaGrid * m.ppqn
 	local itemLength = GetItemLength()
 	m.seqShiftMax = math.floor(itemLength / gridSize) - 1
+
 	if m.seqShift >= m.seqShiftMax then 
 		m.seqShift = 0
 	else
 		m.seqShift = m.seqShift + 1
 	end	
+
 	seqShiftVal.label = tostring(m.seqShift)
 	InsertNotes()
 end
@@ -1812,7 +1824,7 @@ end
 -- Sequencer repeat start
 seqLoopStartDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nseqLoopStartDrop.onLClick()") end
+	if debug or m.debug then ConMsg("seqLoopStartDrop.onLClick()") end
 	
 	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
 	local gridSizeP = m.reaGrid * m.ppqn
@@ -1864,7 +1876,7 @@ end
 -- Sequencer repeat length
 seqLoopLenDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nseqLoopLenDrop.onLClick()") end
+	if debug or m.debug then ConMsg("seqLoopLenDrop.onLClick()") end
 	
 	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
 	local gridSizeP = m.reaGrid * m.ppqn
@@ -1909,7 +1921,7 @@ end
 -- Sequencer repeat amount
 seqLoopNumDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nseqLoopNumDrop.onLClick()") end
+	if debug or m.debug then ConMsg("seqLoopNumDrop.onLClick()") end
 	
 	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
 	local gridSizeP = m.reaGrid * m.ppqn
@@ -1971,6 +1983,7 @@ end
 function SetDefaultAccLegSliders()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultAccLegSliders()") end
+	
 	-- if seq accent & legato sliders were saved to project state, load them
 	if pExtState.seqAccRSldrLo then 
 		seqAccRSldr.val1 = pExtState.seqAccRSldrLo
@@ -1992,11 +2005,11 @@ function SetDefaultAccLegSliders()
 	else
 		seqLegProbSldr.val1 = m.legatoProb
 	end
-end
+end -- function
 -- Set default grid sliders
 function SetDefaultSeqGridSliders()
 	local debug = false
-	if debug or m.debug then ConMsg("\nSetDefaultSeqGridSliders()") end
+	if debug or m.debug then ConMsg("SetDefaultSeqGridSliders()") end
 
 	GetReaperGrid(seqGridRad)
 	SetSeqGridSizes(t_seqSliders)	
@@ -2046,6 +2059,7 @@ end
 function SetDefaultSeqShift()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultSeqShift()") end
+	
 		m.seqShift = 0
 		m.seqShiftMin = 0
 		m.seqShiftMax = 0
@@ -2053,15 +2067,39 @@ function SetDefaultSeqShift()
 end
 -- Set default sequencer repeat state
 function SetDefaultSeqRepeat()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultSeqRepeat()") end
+	
 	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
 	local gridSize = m.reaGrid * m.ppqn
 	local itemLength = GetItemLength()
-
-	m.loopStartG = 1; m.loopLenG = 1; m.loopNum = 1
 	
-	seqLoopStartDrop.val1 = m.loopStartG
-	seqLoopNumDrop.val1 = m.loopNum
-	seqLoopLenDrop.val1 = m.loopLenG
+	-- start
+	if pExtState.loopStartG then 
+		m.loopStartG = pExtState.loopStartG
+		seqLoopStartDrop.val1 = m.loopStartG
+	else
+		m.loopStartG = 1
+		seqLoopStartDrop.val1 = m.loopStartG		
+	end
+	
+	-- length
+	if pExtState.loopLenG then 
+		m.loopLenG = pExtState.loopLenG
+		seqLoopLenDrop.val1 = m.loopLenG
+	else
+		m.loopLenG = 1
+		seqLoopLenDrop.val1 = m.loopLenG		
+	end	
+	
+	-- amount
+	if pExtState.loopNum then 
+		m.loopNum = pExtState.loopNum
+		seqLoopNumDrop.val1 = m.loopNum
+	else
+		m.loopNum = 1
+		seqLoopNumDrop.val1 = m.loopNum		
+	end	
 
 	m.loopMaxRep = math.floor(itemLength / gridSize)	
 	
@@ -2070,17 +2108,13 @@ function SetDefaultSeqRepeat()
 		seqLoopNumDrop.val2[i] = i
 		seqLoopLenDrop.val2[i] = i
 	end
-	--[[
-m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN
-seqLoopLenDrop, m.t_loopLen)
-seqLoopNumDrop, m.t_loopNum)
---]]
 end
 
--- Reset sequencer grid sliders
+-- Reset sequencer sections
 seqSldrText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nseqSldrText.onLClick()") end
+	if debug or m.debug then ConMsg("seqSldrText.onLClick()") end
+	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Sequence Sliders")
 	if result == 1 then
@@ -2109,9 +2143,11 @@ end
 -- Reset sequencer velocity slider
 seqAccSldrText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nseqAccSldrText.onLClick()") end
+	if debug or m.debug then ConMsg("seqAccSldrText.onRClick()") end
+	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Accent Sliders")
+	
 	if result == 1 then 
 		seqAccRSldr.val1 = m.accentLow
 		if pExtState.seqAccRSldrLo then pExtState.seqAccRSldrLo = nil end		
@@ -2119,15 +2155,17 @@ seqAccSldrText.onRClick = function()
 		if pExtState.seqAccRSldrHi then pExtState.seqAccRSldrHi = nil end
 		seqAccProbSldr.val1 = m.accentProb
 		if pExtState.seqAccProb then pExtState.seqAccProb = nil end
-	pExtSaveStateF = true	-- set the ext state save flag
+		pExtSaveStateF = true	-- set the ext state save flag
 	end -- result
 end
 -- Reset sequencer legato slider
 seqLegSldrText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nseqLegSldrText.onLClick()") end
+	if debug or m.debug then ConMsg("seqLegSldrText.onLClick()") end
+	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Legato Slider")
+	
 	if result == 1 then 
 		seqLegProbSldr.val1 = m.legatoProb
 		if pExtState.seqLegProb then pExtState.seqLegProb = nil end
@@ -2137,16 +2175,58 @@ end
 -- Reset sequencer shift
 seqShiftText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\nseqShiftText.onRClick") end
+	if debug or m.debug then ConMsg("seqShiftText.onRClick") end
+	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Note Shift")
+
 	if result == 1 then
 		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
 		seqShiftVal.label = tostring(m.seqShift)
 		InsertNotes()
 	end -- result
 end	
+-- Reset sequencer repeat
+seqLoopText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("seqLoopText.onRClick") end
+	
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Repeat|Glue Repeat")
 
+	if result == 1 then 
+		-- reset the GUI and repeat flag
+		m.seqRepeatF = false 
+		seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
+		seqOptionsCb.onLClick()
+		-- reset the drop down lists and clear pExtState
+		seqLoopStartDrop.val1 = 1; m.loopStartG = 1
+		if pExtState.loopStartG then pExtState.loopStartG = nil end
+		seqLoopLenDrop.val1 = 1; m.loopLenG = 1
+		if pExtState.loopLenG then pExtState.loopLenG = nil end
+		seqLoopNumDrop.val1 = 1; m.loopNum = 1
+		if pExtState.loopNum then pExtState.loopNum = nil end
+		pExtSaveStateF = true	-- set the ext state save flag
+		InsertNotes()
+		
+	elseif result == 2 then
+		m.loopGlueF = true
+		InsertNotes()
+		-- reset the GUI and repeat flag
+		m.seqRepeatF = false 
+		seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0	
+		seqOptionsCb.onLClick()
+		-- reset the drop down lists and pExtState
+		seqLoopStartDrop.val1 = 1; m.loopStartG = 1
+		if pExtState.loopStartG then pExtState.loopStartG = nil end
+		seqLoopLenDrop.val1 = 1; m.loopLenG = 1
+		if pExtState.loopLenG then pExtState.loopLenG = nil end
+		seqLoopNumDrop.val1 = 1; m.loopNum = 1
+		if pExtState.loopNum then pExtState.loopNum = nil end
+		pExtSaveStateF = true	-- set the ext state save flag
+	end -- result
+	
+end -- onRClick
 
 --------------------------------------------------------------------------------
 -- Euclidiser
@@ -2155,6 +2235,7 @@ end
 euclidBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\neuclidBtn.onLClick()") end
+	
 	if m.activeTake then
 		if m.eucF then
 			if debug or m.debug then ConMsg("m.eucF = " .. tostring(m.eucF)) end
@@ -2164,6 +2245,7 @@ euclidBtn.onLClick = function()
 			if m.eucRndNotesF then 
 				randomBtn.onLClick() -- call RandomiseNotes
 			end
+			
 		else -- not m.eucF
 			if debug or m.debug then ConMsg("m.eucF = " .. tostring(m.eucF)) end
 			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
@@ -2174,6 +2256,7 @@ euclidBtn.onLClick = function()
 				randomBtn.onLClick() -- call RandomiseNotes
 			end    
 		end -- m.eucF
+		
 		-- set project ext state		
 		pExtState.eucSliders = {}
 		for k, v in pairs(t_euclidSliders) do
@@ -2185,7 +2268,8 @@ end
 -- Euclidiser options
 eucOptionsCb.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\neucOptionsCb.onLClick()") end
+	if debug or m.debug then ConMsg("eucOptionsCb.onLClick()") end
+	
 	m.eucF = 				 eucOptionsCb.val1[1] == 1 and true or false -- Generate
 	m.eucAccentF = 	 eucOptionsCb.val1[2] == 1 and true or false -- Accent
 	m.eucRndNotesF = eucOptionsCb.val1[3] == 1 and true or false -- Randomise notes
@@ -2197,6 +2281,7 @@ end
 euclidPulsesSldr.onMove = function()
 	local debug = false
 	if debug or m.debug then ConMsg("euclidPlusesSldr.onMove()") end
+	
 	if euclidPulsesSldr.val1 > euclidStepsSldr.val1 then -- pulses > steps
 		euclidStepsSldr.val1 = euclidPulsesSldr.val1
 		euclidRotationSldr.max = euclidStepsSldr.val1
@@ -2221,6 +2306,7 @@ end
 euclidRotationSldr.onMove = function()
 	local debug = false
 	if debug or m.debug then ConMsg("euclidRotationSldr.onMove()") end
+	
 	euclidRotationSldr.max = euclidStepsSldr.val1
 	if euclidRotationSldr.val1 > euclidStepsSldr.val1 then
 		euclidRotationSldr.val1 = euclidStepsSldr.val1
@@ -2232,12 +2318,14 @@ end
 function SetDefaultEucOptions()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultEucOptions()") end
+	
 	-- if euclidean options were saved to project state, load them
 	if pExtState.eucOptionsCb then 
 		m.eucF = 					pExtState.eucOptionsCb[1] ==  true and true or false
 		m.eucAccentF = 		pExtState.eucOptionsCb[2] ==  true and true or false
 		m.eucRndNotesF = 	pExtState.eucOptionsCb[3] ==  true and true or false
 	end
+	
 	-- set euclidean options using defaults, or loaded project state
 	eucOptionsCb.val1[1] = (true and m.eucF) and 1 or 0 -- generate
 	eucOptionsCb.val1[2] = (true and m.eucAccentF) and 1 or 0 -- accents
@@ -2247,12 +2335,14 @@ end
 function SetDefaultEucSliders()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultEucSliders()") end
+	
 	-- if euclidean sliders were saved to project state, load them
 	if pExtState.eucSliders then
 		for k, v in pairs(t_euclidSliders) do
 			v.val1 = pExtState.eucSliders[k]
 		end
 	else
+	
 		euclidPulsesSldr.val1 = m.eucPulses
 		euclidStepsSldr.val1 = m.eucSteps
 		euclidRotationSldr.val1 = m.eucRot
@@ -2262,9 +2352,11 @@ end
 -- Reset euclidean sliders
 txtEuclidLabel.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("\ntxtEuclidLabel.onLClick()") end
+	if debug or m.debug then ConMsg("txtEuclidLabel.onLClick()") end
+	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Euclid Sliders")
+	
 	if result == 1 then 
 		euclidPulsesSldr.val1 = m.eucPulses
 		euclidStepsSldr.val1 = m.eucSteps
@@ -2329,18 +2421,19 @@ function InitMidiExMachina()
 				pExtState = unpickle(pExtStateStr)
 			end -- pExtStateStr
 		end -- pExtLoadStateF
-		
+	
+	-- get some item info
+	GetItemLength()
+	GetNotesFromTake() -- grab the original note data (if any...)	
+	
 	-- set GUI defaults or restore from project state
 	SetDefaultWindowOpts();	SetDefaultLayer() 
 	SetDefaultScaleOpts()
 	SetDefaultRndOptions(); SetDefaultRndSliders()
-	SetDefaultSeqOptions(); SetDefaultSeqShift()
+	SetDefaultSeqOptions(); SetDefaultSeqShift(); SetDefaultSeqRepeat()
 	SetDefaultSeqGridSliders(); SetDefaultAccLegSliders()
-	SetDefaultSeqRepeat()
 	SetDefaultEucOptions(); SetDefaultEucSliders()
 
-	GetItemLength()
-	GetNotesFromTake() -- grab the original note data (if any...)
 	if debug or m.debug then ConMsg("End InitMidiExMachina()\n") end
 end
 --------------------------------------------------------------------------------
@@ -2348,7 +2441,8 @@ end
 --------------------------------------------------------------------------------
 function InitGFX()
 	local debug = false
-	if debug or m.debug then ConMsg("InitGFX()") end
+	if debug or m.debug then ConMsg("\nInitGFX()") end
+	
 	-- Init window ------
 	gfx.clear = RGB2Packed(table.unpack(m.win_bg))     
 	gfx.init(m.win_title, m.win_w * e.gScale, m.win_h * e.gScale, m.win_dockstate, m.win_x, m.win_y)
