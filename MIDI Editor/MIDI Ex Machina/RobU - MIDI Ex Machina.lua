@@ -116,10 +116,7 @@ m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
 m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
 m.seqShift = 0; m.seqShiftMin = -16; m.seqShiftMax = 16 -- shift notes left-right from sequencer
 m.loopStartG, m.loopLenG, m.loopNum, m.loopMaxRep = 0, 0, 0, 0 -- repeat values for GUI
-m.t_loopStart, m.t_loopRep, m.t_loopLenG = {}, {}, {} -- repeat value tables
-
---m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN  = 0, 0, 0, 0 -- repeat values
-
+m.t_loopStart, m.t_loopNum, m.t_loopLen = {}, {}, {} -- repeat value tables
 
 -- euclidean generator
 m.eucF = true	-- generate euclid (option)
@@ -434,7 +431,7 @@ function GetItemLength()
 		ConMsg("Num of Bar      = " .. numBarsPerItem)
 		ConMsg("Item size ppqn  = " .. ItemPPQN .. "\n")
 	end
-	return ItemPPQN
+	return math.floor(ItemPPQN)
 end
 --------------------------------------------------------------------------------
 -- GetReaperGrid() - get the current grid size, set global var m.reaGrid
@@ -754,10 +751,8 @@ end
 function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 	local debug = false
 	if debug or m.debug then ConMsg("GenSequence()") end
-	local t, t2 = NewNoteBuf(), GetNoteBuf()
-	CopyTable(t2, t)
+	local t = NewNoteBuf()
 	GetReaperGrid() -- populates m.reaGrid
-	ClearTable(t)
 	local itemPos = 0
 	local gridSize = m.reaGrid * m.ppqn
 	local itemLength = GetItemLength()
@@ -811,8 +806,8 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 	end -- itemPos < itemLength
 	if debug or m.debug then PrintNotes(t) end
 	PurgeNoteBuf()
-	if not m.seqRndNotesF then InsertNotes() end
-	--InsertNotes()
+	--if not m.seqRndNotesF then InsertNotes() end
+	InsertNotes()
 end
 --------------------------------------------------------------------------------
 -- GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
@@ -868,7 +863,8 @@ function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 		idx = Wrap(idx, step)
 	end
 	PurgeNoteBuf()
-	if not m.eucRndNotesF then InsertNotes() end
+	--if not m.eucRndNotesF then InsertNotes() end
+	InsertNotes()
 end
 --------------------------------------------------------------------------------
 -- GenNoteAttributes(accF, accProb, accVal, legF, legVal) -- accent, legato only
@@ -904,29 +900,38 @@ end
 -- InsertNotes() - insert current note buffer in the active take
 --------------------------------------------------------------------------------
 function InsertNotes()
-	local debug = true
+	local debug = false
 	if debug or m.debug then ConMsg("\nInsertNotes()") end
 	local i = 1
 	if m.activeTake then
-		local gridSize = m.reaGrid * m.ppqn
+		local gridSize = math.floor(m.reaGrid * m.ppqn)
 		local itemLenP = GetItemLength()	
-		local noteShift = m.seqShift * gridSize
+		local noteShift = math.floor(m.seqShift * gridSize)
 		local t1 = GetNoteBuf()	
-		PrintNotes(t1)		
+		if debug then PrintNotes(t1) end
 
 		-- note shifter
+		if debug then ConMsg("Shifting...") end
 		local t2 = {} -- temp table for note shifter (no undo)
+		if debug or m.debug then ConMsg("itemLenP = " .. tostring(itemLenP)) end
+		if debug or m.debug then ConMsg("gridSize = " .. tostring(gridSize)) end
+		if debug or m.debug then ConMsg("noteShift = " .. tostring(noteShift)) end
 		CopyTable(t1, t2)		
 		for k, v in pairs(t2) do
+			if debug or m.debug then ConMsg("idx =\t" .. tostring(k)) end
+			if debug or m.debug then ConMsg("orig start =\t" .. tostring(v[3]) .. " - orig end =\t" .. tostring(v[4])) end
 			v[3] = v[3] + noteShift
-			v[4] = v[4] + noteShift			
+			v[4] = v[4] + noteShift
+			if debug or m.debug then ConMsg("shift start =\t" .. tostring(v[3]) .. " - shift end =\t" .. tostring(v[4])) end
 			if v[3] < 0 then
 				v[3] = itemLenP + v[3]
-				v[4] = itemLenP + v[4]	
+				v[4] = itemLenP + v[4]
 				if v[4] > itemLenP then v[4] = itemLenP end
+				if debug or m.debug then ConMsg("neg start =\t" .. tostring(v[3]) .. " - neg end =\t" .. tostring(v[4])) end
 			elseif v[3] >= itemLenP then
 				v[3] = v[3] - itemLenP
-				v[4] = v[4] - itemLenP				
+				v[4] = v[4] - itemLenP
+				if debug or m.debug then ConMsg("pos start =\t" .. tostring(v[3]) .. " - poa end =\t" .. tostring(v[4])) end
 			end
 		end -- for k, v t2
 
@@ -935,11 +940,12 @@ function InsertNotes()
 			if debug then ConMsg("Repeating...") end
 			DeleteNotes()
 			t3 = {} -- temp table for note repeater (no undo)
-			local loopStartP = (m.t_loopStart[m.loopStartG] - 1) * gridSize
+			local loopStartP = (m.loopStartG -1) * gridSize
 			local loopLenP = m.loopLenG * gridSize
 			local loopEndP = loopStartP + loopLenP
 			local loopNum = m.loopNum
 			local noteEnd
+			local kOff = 0
 			local writeOffP = 0
 			if loopStartP > 0 then writeOffP = -loopStartP else writeOffP = 0 end
 			
@@ -950,39 +956,97 @@ function InsertNotes()
 			if debug or m.debug then ConMsg("loopNum   = " .. tostring(loopNum)) end
 			if debug or m.debug then ConMsg("writeOffP  = " .. tostring(writeOffP)) end
 			
+			-- pre-repeat start
+			if debug or m.debug then ConMsg("\nStart pre-repeat...") end
+			for k, v in pairs(t2) do 
+				if v[3] >= 0 and v[3] < loopStartP then
+					t3[k] = {}
+					t3[k][1] = v[1] -- selected
+					t3[k][2] = v[2] -- muted
+					t3[k][3] = v[3] -- startppqn					
+					t3[k][4] = v[4] -- endppqn
+					if not t3[k][9] then t3[k][4] = t3[k][4] - m.legato end -- handle the legatolessness
+					t3[k][6] = v[6] -- channel
+					t3[k][7] = v[7] -- pitch
+					t3[k][8] = v[8] -- vel
+					if debug or m.debug then ConMsg("a - idx = " .. tostring(k) .. " - Start = " .. tostring(v[3]) .. " - End = " .. tostring(v[4])) end
+					if debug or m.debug then ConMsg("b - idx = " .. tostring(k) .. " - Start = " .. tostring(t3[k][3]) .. " - End = " .. tostring(t3[k][4])) end
+					reaper.MIDI_InsertNote(m.activeTake, t3[k][1], t3[k][2], t3[k][3], t3[k][4], t3[k][6], t3[k][7], t3[k][8], false)
+					kOff = kOff + 1
+					--if debug or m.debug then ConMsg("kOff  = " .. tostring(kOff)) end
+				end
+			end -- k, v in pairs(t2) - pre-repeat
+			writeOffP = writeOffP + loopStartP
+			
+			-- repeat start
 			if debug or m.debug then ConMsg("\nStart repeater...") end
 			while loopNum > 0 do
 				if debug or m.debug then ConMsg("\nloopNum  = " .. tostring(loopNum)) end
 				if debug or m.debug then ConMsg("writeOffP   = " .. tostring(writeOffP)) end
-	
 				for k, v in pairs(t2) do
 					if v[3] >= loopStartP and v[3] < loopEndP then
-						t3[k] = {}	
-						t3[k][1] = v[1] -- selected 
-						t3[k][2] = v[2] -- muted
-
-						t3[k][3] = v[3] + writeOffP -- startppqn
-						
+						t3[k + kOff] = {}
+						t3[k + kOff][1] = v[1] -- selected 
+						t3[k + kOff][2] = v[2] -- muted
+						t3[k + kOff][3] = v[3] + writeOffP -- startppqn
 						if v[4] > loopEndP then -- endppqn
-							t3[k][4] = loopEndP + writeOffP
+							t3[k + kOff][4] = loopEndP + writeOffP
 						else 
-							t3[k][4] = v[4] + writeOffP
+							t3[k + kOff][4] = v[4] + writeOffP
 						end
-					
-						if not t3[k][9] then t3[k][4] = t3[k][4] - m.legato end -- handle the legatolessness
-						
-						t3[k][6] = v[6] -- channel
-						t3[k][7] = v[7] -- pitch
-						t3[k][8] = v[8] -- vel
+						if not t3[k + kOff][9] then t3[k + kOff][4] = t3[k + kOff][4] - m.legato end -- handle the legatolessness
+						t3[k + kOff][6] = v[6] -- channel
+						t3[k + kOff][7] = v[7] -- pitch
+						t3[k + kOff][8] = v[8] -- vel
 						if debug or m.debug then ConMsg("a - idx = " .. tostring(k) .. " - Start = " .. tostring(v[3]) .. " - End = " .. tostring(v[4])) end
-						if debug or m.debug then ConMsg("b - idx = " .. tostring(k) .. " - Start = " .. tostring(t3[k][3]) .. " - End = " .. tostring(t3[k][4])) end
-						reaper.MIDI_InsertNote(m.activeTake, t3[k][1], t3[k][2], t3[k][3], t3[k][4], t3[k][6], t3[k][7], t3[k][8], false)
+						if debug or m.debug then ConMsg("b - idx = " .. tostring(k + kOff) .. " - Start = " .. tostring(t3[k + kOff][3]) .. " - End = " .. tostring(t3[k + kOff][4])) end
+						reaper.MIDI_InsertNote(m.activeTake, t3[k + kOff][1], t3[k + kOff][2], t3[k + kOff][3], t3[k + kOff][4], t3[k + kOff][6], t3[k + kOff][7], t3[k + kOff][8], false)
 						
 					end -- if v[3]
-				end -- for k, v t3
+				end -- for k, v t3 - repeat
 				loopNum = loopNum - 1
 				writeOffP = writeOffP + loopLenP
-			end
+			end -- while loopNum > 0
+
+			-- post-repeat start
+			if debug or m.debug then ConMsg("\nStart post-repeat...") end
+			if debug or m.debug then ConMsg("writeOffP   = " .. tostring(writeOffP)) end
+
+			kOff = kOff + 1
+			local written = loopStartP + (loopLenP * m.loopNum)
+				if debug or m.debug then ConMsg("written  = " .. tostring(written)) end			
+			local remLenP = itemLenP - written
+				if debug or m.debug then ConMsg("remLenP  = " .. tostring(remLenP)) end			
+			local readStartP = loopStartP + loopLenP
+				if debug or m.debug then ConMsg("readStartP  = " .. tostring(readStartP)) end			
+			local readEndP = readStartP + remLenP
+				if debug or m.debug then ConMsg("readEndP = " .. tostring(readEndP)) end
+			local writeOffP = written - readStartP
+				if debug or m.debug then ConMsg("writeOffP = " .. tostring(writeOffP)) end
+			
+			for k, v in pairs(t2) do
+				if v[3] >= readStartP and v[3] < readEndP then
+						t3[k + kOff] = {}
+						t3[k + kOff][1] = v[1] -- selected 
+						t3[k + kOff][2] = v[2] -- muted
+						t3[k + kOff][3] = v[3] + writeOffP -- startppqn
+						if v[4] > itemLenP then -- endppqn
+							t3[k + kOff][4] = itemLenP
+						else 
+							t3[k + kOff][4] = v[4] + writeOffP
+						end
+					if not t3[k + kOff][9] then t3[k + kOff][4] = t3[k + kOff][4] - m.legato end -- handle the legatolessness
+					t3[k + kOff][6] = v[6] -- channel
+					t3[k + kOff][7] = v[7] -- pitch
+					t3[k + kOff][8] = v[8] -- vel
+					if debug or m.debug then ConMsg("a - idx = " .. tostring(k) .. " - Start = " .. tostring(v[3]) .. " - End = " .. tostring(v[4])) end
+					if debug or m.debug then ConMsg("b - idx = " .. tostring(k + kOff) .. " - Start = " .. tostring(t3[k + kOff][3]) .. " - End = " .. tostring(t3[k + kOff][4])) end
+					reaper.MIDI_InsertNote(m.activeTake, t3[k + kOff][1], t3[k + kOff][2], t3[k + kOff][3], t3[k + kOff][4], t3[k + kOff][6], t3[k + kOff][7], t3[k + kOff][8], false)
+					kOff = kOff + 1
+					if debug or m.debug then ConMsg("kOff  = " .. tostring(kOff)) end
+				end			
+			end -- k, v in pairs(t2) - post-repeat
+			
 			reaper.MIDI_Sort(m.activeTake)
 			reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
 		else -- not m.seqRepeatF
@@ -1064,7 +1128,7 @@ end
 -- PrintNotes - arg note_buffer t; print note_buffer to reaper console
 --------------------------------------------------------------------------------
 function PrintNotes(t) -- debug code
-	local debug = true
+	local debug = false
 	if debug or m.debug then ConMsg("PrintNotes()") end
 	if not t then return end
 	local i = 1
@@ -1208,8 +1272,8 @@ local seqLegSldrText = e.Textbox:new({2},     sx+(sp * 9), 210, sw, 20, e.col_gr
 
 -- repeat dropboxes
 local seqLoopStartDrop = e.Droplist:new({2}, sx+(sp*10)+25, sy+15,  sw*2, 20, e.col_blue,  "Start",  m.defFont, m.defFontSz, e.col_grey8, m.loopStartG, m.t_loopStart)
-local seqLoopLenDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+65,  sw*2, 20, e.col_blue,  "Length", m.defFont, m.defFontSz, e.col_grey8, m.loopLenG, m.t_loopLenG)
-local seqLoopNumDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+115, sw*2, 20, e.col_blue,  "Amount", m.defFont, m.defFontSz, e.col_grey8, m.loopNum, m.t_loopRep)
+local seqLoopLenDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+65,  sw*2, 20, e.col_blue,  "Length", m.defFont, m.defFontSz, e.col_grey8, m.loopLenG, m.t_loopLen)
+local seqLoopNumDrop   = e.Droplist:new({2}, sx+(sp*10)+25, sy+115, sw*2, 20, e.col_blue,  "Amount", m.defFont, m.defFontSz, e.col_grey8, m.loopNum, m.t_loopNum)
 local seqLoopText      = e.Textbox:new({2},  sx+(sp*10)+25, 210,    sw*2, 20, e.col_grey5, "Repeat", m.defFont, m.defFontSz, e.col_grey7)
 
 -- sequence shift buttons
@@ -1747,10 +1811,51 @@ end
 
 -- Sequencer repeat start
 seqLoopStartDrop.onLClick = function()
-	local debug = true
+	local debug = false
 	if debug or m.debug then ConMsg("\nseqLoopStartDrop.onLClick()") end
+	
+	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
+	local gridSizeP = m.reaGrid * m.ppqn
+		if debug or m.debug then ConMsg("gridSizeP  = " .. tostring(gridSizeP)) end	
+	local itemLenP = GetItemLength()
+		if debug or m.debug then ConMsg("itemLenP   = " .. tostring(itemLenP)) end		
+	local itemLenG = math.floor(itemLenP / gridSizeP)
+		if debug or m.debug then ConMsg("itemLenG   = " .. tostring(itemLenG)) end	
+	local remLenG = itemLenG - (seqLoopStartDrop.val1 -1)
+		if debug or m.debug then ConMsg("remLenG    = " .. tostring(remLenG)) end	 	
+	
+	-- set the start point lookup table
+	for i = 1, itemLenG do
+		seqLoopStartDrop.val2[i] = i
+		m.t_loopStart[i] = i
+	end
 	m.loopStartG = seqLoopStartDrop.val1
-	UpdateSeqRepeat()
+	
+	-- check the loop length doesn't exceed the remaining item length
+	if seqLoopLenDrop.val1 > remLenG then seqLoopLenDrop.val1 = remLenG end
+	seqLoopLenDrop.val2 = {}
+	for i = 1, remLenG do
+		seqLoopLenDrop.val2[i] = i
+	end			
+	m.loopLenG = seqLoopLenDrop.val1
+	
+	-- check the loop amount doesn't exceed the remaining item length
+	while seqLoopNumDrop.val1 * m.loopLenG > remLenG do
+		seqLoopNumDrop.val1 = seqLoopNumDrop.val1 - 1
+	end
+	seqLoopNumDrop.val2 = {}
+	local maxLoops = math.floor(remLenG / m.loopLenG)
+	for i = 1, maxLoops do
+		seqLoopNumDrop.val2[i] = i
+	end	
+	m.loopNum = seqLoopNumDrop.val1
+	
+	if m.seqRepeatF then InsertNotes() end
+
+	if debug or m.debug then ConMsg("m.loopStartG = " .. tostring(m.loopStartG)) end
+	if debug or m.debug then ConMsg("m.loopLenG   = " .. tostring(m.loopLenG)) end
+	if debug or m.debug then ConMsg("m.loopNum    = " .. tostring(m.loopNum)) end	
+
 	-- set project ext state	
 	--pExtState.oct = m.oct
 	--pExtState.root = m.root
@@ -1758,10 +1863,44 @@ seqLoopStartDrop.onLClick = function()
 end
 -- Sequencer repeat length
 seqLoopLenDrop.onLClick = function()
-	local debug = true
+	local debug = false
 	if debug or m.debug then ConMsg("\nseqLoopLenDrop.onLClick()") end
+	
+	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
+	local gridSizeP = m.reaGrid * m.ppqn
+		if debug or m.debug then ConMsg("gridSizeP  = " .. tostring(gridSizeP)) end	
+	local itemLenP = GetItemLength()
+		if debug or m.debug then ConMsg("itemLenP   = " .. tostring(itemLenP)) end		
+	local itemLenG = math.floor(itemLenP / gridSizeP)
+		if debug or m.debug then ConMsg("itemLenG   = " .. tostring(itemLenG)) end	
+	local remLenG = itemLenG - (seqLoopStartDrop.val1 -1)
+		if debug or m.debug then ConMsg("remLenG    = " .. tostring(remLenG)) end	 	
+	
+	-- check the loop length doesn't exceed the remaining item length
+	if seqLoopLenDrop.val1 > remLenG then seqLoopLenDrop.val1 = remLenG end
+	seqLoopLenDrop.val2 = {}
+	for i = 1, remLenG do
+		seqLoopLenDrop.val2[i] = i
+	end			
 	m.loopLenG = seqLoopLenDrop.val1
-	UpdateSeqRepeat()
+	
+	-- check the loop amount doesn't exceed the remaining item length
+	while seqLoopNumDrop.val1 * m.loopLenG > remLenG do
+		seqLoopNumDrop.val1 = seqLoopNumDrop.val1 - 1
+	end
+	seqLoopNumDrop.val2 = {}
+	local maxLoops = math.floor(remLenG / m.loopLenG)
+	for i = 1, maxLoops do
+		seqLoopNumDrop.val2[i] = i
+	end	
+	m.loopNum = seqLoopNumDrop.val1
+	
+	if m.seqRepeatF then InsertNotes() end
+
+	if debug or m.debug then ConMsg("m.loopStartG = " .. tostring(m.t_loopStart[m.loopStartG])) end
+	if debug or m.debug then ConMsg("m.loopLenG   = " .. tostring(m.loopLenG)) end
+	if debug or m.debug then ConMsg("m.loopNum    = " .. tostring(m.loopNum)) end	
+
 	-- set project ext state	
 	--pExtState.oct = m.oct
 	--pExtState.root = m.root
@@ -1769,10 +1908,36 @@ seqLoopLenDrop.onLClick = function()
 end
 -- Sequencer repeat amount
 seqLoopNumDrop.onLClick = function()
-	local debug = true
+	local debug = false
 	if debug or m.debug then ConMsg("\nseqLoopNumDrop.onLClick()") end
+	
+	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
+	local gridSizeP = m.reaGrid * m.ppqn
+		if debug or m.debug then ConMsg("gridSizeP  = " .. tostring(gridSizeP)) end	
+	local itemLenP = GetItemLength()
+		if debug or m.debug then ConMsg("itemLenP   = " .. tostring(itemLenP)) end		
+	local itemLenG = math.floor(itemLenP / gridSizeP)
+		if debug or m.debug then ConMsg("itemLenG   = " .. tostring(itemLenG)) end	
+	local remLenG = itemLenG - (seqLoopStartDrop.val1 -1)
+		if debug or m.debug then ConMsg("remLenG    = " .. tostring(remLenG)) end	 	
+	
+	-- check the loop amount doesn't exceed the remaining item length
+	while seqLoopNumDrop.val1 * m.loopLenG > remLenG do
+		seqLoopNumDrop.val1 = seqLoopNumDrop.val1 - 1
+	end
+	seqLoopNumDrop.val2 = {}
+	local maxLoops = math.floor(remLenG / m.loopLenG)
+	for i = 1, maxLoops do
+		seqLoopNumDrop.val2[i] = i
+	end	
 	m.loopNum = seqLoopNumDrop.val1
-	UpdateSeqRepeat()
+	
+	if m.seqRepeatF then InsertNotes() end
+
+	if debug or m.debug then ConMsg("m.loopStartG = " .. tostring(m.t_loopStart[m.loopStartG])) end
+	if debug or m.debug then ConMsg("m.loopLenG   = " .. tostring(m.loopLenG)) end
+	if debug or m.debug then ConMsg("m.loopNum    = " .. tostring(m.loopNum)) end	
+
 	-- set project ext state	
 	--pExtState.oct = m.oct
 	--pExtState.root = m.root
@@ -1802,7 +1967,6 @@ function SetDefaultSeqOptions()
 	seqOptionsCb.val1[5] = (true and m.seqRndNotesF) and 1 or 0 -- random notes
 	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0 -- repeat
 end
-
 -- Set default accent & legato sliders
 function SetDefaultAccLegSliders()
 	local debug = false
@@ -1829,7 +1993,6 @@ function SetDefaultAccLegSliders()
 		seqLegProbSldr.val1 = m.legatoProb
 	end
 end
-
 -- Set default grid sliders
 function SetDefaultSeqGridSliders()
 	local debug = false
@@ -1879,7 +2042,6 @@ function SetDefaultSeqGridSliders()
 		end
 		
 end
-
 -- Set default sequencer shift state
 function SetDefaultSeqShift()
 	local debug = false
@@ -1889,67 +2051,31 @@ function SetDefaultSeqShift()
 		m.seqShiftMax = 0
 		seqShiftVal.label = tostring(m.seqShift)
 end
-
 -- Set default sequencer repeat state
 function SetDefaultSeqRepeat()
 	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
 	local gridSize = m.reaGrid * m.ppqn
 	local itemLength = GetItemLength()
 
-	m.loopLenG = 1; m.loopNum = 1; m.loopStartG = 1
+	m.loopStartG = 1; m.loopLenG = 1; m.loopNum = 1
 	
+	seqLoopStartDrop.val1 = m.loopStartG
 	seqLoopNumDrop.val1 = m.loopNum
 	seqLoopLenDrop.val1 = m.loopLenG
-	seqLoopStartDrop.val1 = m.loopStartG
-	
+
 	m.loopMaxRep = math.floor(itemLength / gridSize)	
 	
 	for i = 1, m.loopMaxRep do
-		seqLoopStartDrop.val2[i] = i	
+		seqLoopStartDrop.val2[i] = i
 		seqLoopNumDrop.val2[i] = i
 		seqLoopLenDrop.val2[i] = i
 	end
 	--[[
 m.repNum, m.repLenGrid, m.repMax, m.repLenPPQN
-seqLoopLenDrop, m.t_loopLenG)
-seqLoopNumDrop, m.t_loopRep)
+seqLoopLenDrop, m.t_loopLen)
+seqLoopNumDrop, m.t_loopNum)
 --]]
 end
--- Update sequencer repeat state
-function UpdateSeqRepeat()
-	local debug = true
-	if debug or m.debug then ConMsg("\nUpdateSeqRepeat()") end
-	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
-	local gridSizeP = m.reaGrid * m.ppqn
-	if debug or m.debug then ConMsg("gridSizeP  = " .. tostring(gridSizeP)) end	
-	local itemLenP = GetItemLength()
-	if debug or m.debug then ConMsg("itemLenP   = " .. tostring(itemLenP)) end		
-	local itemLenG = math.floor(itemLenP / gridSizeP)
-	if debug or m.debug then ConMsg("itemLenG   = " .. tostring(itemLenG)) end	
-	local remLenG = itemLenG - m.loopStartG
-	if debug or m.debug then ConMsg("remLenG    = " .. tostring(remLenG)) end	 	
-	
-	-- set the start point lookup table
-	for i = 1, itemLenG do
-		seqLoopStartDrop.val2[i], m.t_loopStart[i] = i, i
-	end
-	
-	
-	--[[
-m.t_loopStart, m.t_loopRep, m.t_loopLenG
-seqLoopStartDrop.val1 = m.loopStartG -- loop start point in grid pos
-seqLoopStartDrop.val2[m.loopStartG]  -- loop start lookup table 
-seqLoopLenDrop.val1 = m.loopLenG     -- loop len in grid units
-seqLoopLenDrop.val2[m.loopLenG]      -- loop len lookup table
-seqLoopNumDrop.val1 = m.loopNum      -- loop amount integer
-seqLoopNumDrop.val2[m.loopNum]       -- loop amount lookup table
---]]
-if m.seqRepeatF then InsertNotes() end
-
-	if debug or m.debug then ConMsg("m.loopStartG = " .. tostring(m.t_loopStart[m.loopStartG])) end
-	if debug or m.debug then ConMsg("m.loopLenG   = " .. tostring(m.loopLenG)) end
-	if debug or m.debug then ConMsg("m.loopNum    = " .. tostring(m.loopNum)) end	
-end 
 
 -- Reset sequencer grid sliders
 seqSldrText.onRClick = function()
