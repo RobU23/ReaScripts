@@ -943,50 +943,71 @@ function InsertNotes()
 	if debug or m.debug then ConMsg("InsertNotes()") end
 	
 	local i = 1
-	if m.activeTake then
-		local gridSize = math.floor(m.reaGrid * m.ppqn)
-		local itemLenP = GetItemLength()	
-		local noteShift = math.floor(m.seqShift * gridSize)
-		local t1 = GetNoteBuf()	
 
-		-- note shifter
-		if debug or m.debug then ConMsg("Shifting...") end
-		local t2 = {} -- temp table for note shifter (no undo)
-		CopyTable(t1, t2)		
-		for k, v in pairs(t2) do
-			v[3] = v[3] + noteShift
-			v[4] = v[4] + noteShift
-			if v[3] < 0 then
-				v[3] = itemLenP + v[3]
-				v[4] = itemLenP + v[4]
-				if v[4] > itemLenP then v[4] = itemLenP end
-			elseif v[3] >= itemLenP then
-				v[3] = v[3] - itemLenP
-				v[4] = v[4] - itemLenP
+	local gridSize = math.floor(m.reaGrid * m.ppqn)
+	local itemLenP = GetItemLength()	
+	local noteShift = math.floor(m.seqShift * gridSize)
+	local t1 = GetNoteBuf()	
+
+	-- note shifter
+	if debug or m.debug then ConMsg("Shifting...") end
+	local t2 = {} -- temp table for note shifter (no undo)
+	CopyTable(t1, t2)		
+	for k, v in pairs(t2) do
+		v[3] = v[3] + noteShift
+		v[4] = v[4] + noteShift
+		if v[3] < 0 then
+			v[3] = itemLenP + v[3]
+			v[4] = itemLenP + v[4]
+			if v[4] > itemLenP then v[4] = itemLenP end
+		elseif v[3] >= itemLenP then
+			v[3] = v[3] - itemLenP
+			v[4] = v[4] - itemLenP
+		end
+	end -- for k, v t2
+
+	-- note repeater
+	if m.seqRepeatF then
+		if debug or m.debug then ConMsg("Repeating...") end
+		DeleteNotes()
+		t3 = {} -- temp table for note repeater (for glueing)
+		local loopStartP = (m.loopStartG -1) * gridSize
+		local loopLenP = m.loopLenG * gridSize
+		local loopEndP = loopStartP + loopLenP
+		local loopNum = m.loopNum
+		local i = 1
+		local writeOffP = 0
+		if loopStartP > 0 then writeOffP = -loopStartP else writeOffP = 0 end
+
+		-- pre-repeat
+		for k, v in pairs(t2) do 
+			if v[3] >= 0 and v[3] < loopStartP then
+				t3[i] = {}
+				t3[i][1] = v[1] -- selected
+				t3[i][2] = v[2] -- muted
+				t3[i][3] = v[3] -- startppqn					
+				t3[i][4] = v[4] -- endppqn
+				if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
+				t3[i][5] = v[5] -- length
+				t3[i][6] = v[6] -- channel
+				t3[i][7] = v[7] -- pitch
+				t3[i][8] = v[8] -- vel
+				t3[i][9] = v[9] -- legato
+				reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
+				i = i + 1
 			end
-		end -- for k, v t2
-
-		-- note repeater
-		if m.seqRepeatF then
-			if debug or m.debug then ConMsg("Repeating...") end
-			DeleteNotes()
-			t3 = {} -- temp table for note repeater (for glueing)
-			local loopStartP = (m.loopStartG -1) * gridSize
-			local loopLenP = m.loopLenG * gridSize
-			local loopEndP = loopStartP + loopLenP
-			local loopNum = m.loopNum
-			local i = 1
-			local writeOffP = 0
-			if loopStartP > 0 then writeOffP = -loopStartP else writeOffP = 0 end
-
-			-- pre-repeat
-			for k, v in pairs(t2) do 
-				if v[3] >= 0 and v[3] < loopStartP then
+		end -- k, v in pairs(t2) - pre-repeat
+		writeOffP = writeOffP + loopStartP
+		
+		-- repeat
+		while loopNum > 0 do
+			for k, v in pairs(t2) do
+				if v[3] >= loopStartP and v[3] < loopEndP then
 					t3[i] = {}
-					t3[i][1] = v[1] -- selected
+					t3[i][1] = v[1] -- selected 
 					t3[i][2] = v[2] -- muted
-					t3[i][3] = v[3] -- startppqn					
-					t3[i][4] = v[4] -- endppqn
+					t3[i][3] = v[3] + writeOffP -- startppqn
+					if v[4] > loopEndP then t3[i][4] = loopEndP + writeOffP else t3[i][4] = v[4] + writeOffP end -- endppqn
 					if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
 					t3[i][5] = v[5] -- length
 					t3[i][6] = v[6] -- channel
@@ -995,89 +1016,66 @@ function InsertNotes()
 					t3[i][9] = v[9] -- legato
 					reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
 					i = i + 1
-				end
-			end -- k, v in pairs(t2) - pre-repeat
-			writeOffP = writeOffP + loopStartP
-			
-			-- repeat
-			while loopNum > 0 do
-				for k, v in pairs(t2) do
-					if v[3] >= loopStartP and v[3] < loopEndP then
-						t3[i] = {}
-						t3[i][1] = v[1] -- selected 
-						t3[i][2] = v[2] -- muted
-						t3[i][3] = v[3] + writeOffP -- startppqn
-						if v[4] > loopEndP then t3[i][4] = loopEndP + writeOffP else t3[i][4] = v[4] + writeOffP end -- endppqn
-						if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
-						t3[i][5] = v[5] -- length
-						t3[i][6] = v[6] -- channel
-						t3[i][7] = v[7] -- pitch
-						t3[i][8] = v[8] -- vel
-						t3[i][9] = v[9] -- legato
-						reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
-						i = i + 1
-					end -- if v[3]
-					
-				end -- for k, v t3 - repeat
-				loopNum = loopNum - 1
-				writeOffP = writeOffP + loopLenP
-			end -- while loopNum > 0
+				end -- if v[3]
+				
+			end -- for k, v t3 - repeat
+			loopNum = loopNum - 1
+			writeOffP = writeOffP + loopLenP
+		end -- while loopNum > 0
 
-			-- post-repeat
-			local written = loopStartP + (loopLenP * m.loopNum)	
-			local remLenP = itemLenP - written	
-			local readStartP = loopStartP + loopLenP
-			local readEndP = readStartP + remLenP
-			local writeOffP = written - readStartP
-			
-			for k, v in pairs(t2) do
-				if v[3] >= readStartP and v[3] < readEndP then
-					t3[i] = {}
-					t3[i][1] = v[1] -- selected 
-					t3[i][2] = v[2] -- muted
-					t3[i][3] = v[3] + writeOffP -- startppqn
-					if v[4] > itemLenP then t3[i][4] = itemLenP else t3[i][4] = v[4] + writeOffP end -- endppqn
-					if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
-					t3[i][5] = v[5] -- channel
-					t3[i][6] = v[6] -- channel
-					t3[i][7] = v[7] -- pitch
-					t3[i][8] = v[8] -- vel
-					t3[i][9] = v[9] -- legato
-					reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
-					i = i + 1
-				end			
-			end -- k, v in pairs(t2) - post-repeat
-			
-			reaper.MIDI_Sort(m.activeTake)
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
-			
-		else -- not m.seqRepeatF
-			if debug or m.debug then ConMsg("No repeat...") end
-			DeleteNotes()
-			
-			if m.loopGlueF then
-				if debug or m.debug then ConMsg("Glueing...") end	
-				t4 = NewNoteBuf(); CopyTable(t3, t4)
-				if debug or m.debug then PrintNotes(t4) end
-				for k, v in pairs(t4) do
-					reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)
-				end			
-				m.loopGlueF = false
-			
-			else -- not glueing
-				if debug or m.debug then ConMsg("no glueing, inserting shift table (t2)") end
-				for k, v in pairs(t2) do -- use the post-shifter table
-					if not v[9] then v[4] = v[4] - m.legato end -- handle legatolessness
-					reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)	
-				end -- for k, v t2
-			end -- m.loopGlueF
-			
-			reaper.MIDI_Sort(m.activeTake)
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
-		end -- m.seqRepeatF
-	else
-		if debug or m.debug then ConMsg("No Active Take") end
-	end -- m.activeTake
+		-- post-repeat
+		local written = loopStartP + (loopLenP * m.loopNum)	
+		local remLenP = itemLenP - written	
+		local readStartP = loopStartP + loopLenP
+		local readEndP = readStartP + remLenP
+		local writeOffP = written - readStartP
+		
+		for k, v in pairs(t2) do
+			if v[3] >= readStartP and v[3] < readEndP then
+				t3[i] = {}
+				t3[i][1] = v[1] -- selected 
+				t3[i][2] = v[2] -- muted
+				t3[i][3] = v[3] + writeOffP -- startppqn
+				if v[4] > itemLenP then t3[i][4] = itemLenP else t3[i][4] = v[4] + writeOffP end -- endppqn
+				if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
+				t3[i][5] = v[5] -- channel
+				t3[i][6] = v[6] -- channel
+				t3[i][7] = v[7] -- pitch
+				t3[i][8] = v[8] -- vel
+				t3[i][9] = v[9] -- legato
+				reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
+				i = i + 1
+			end			
+		end -- k, v in pairs(t2) - post-repeat
+		
+		reaper.MIDI_Sort(m.activeTake)
+		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+		
+	else -- not m.seqRepeatF
+		if debug or m.debug then ConMsg("No repeat...") end
+		DeleteNotes()
+		
+		if m.loopGlueF then
+			if debug or m.debug then ConMsg("Glueing...") end	
+			t4 = NewNoteBuf(); CopyTable(t3, t4)
+			if debug or m.debug then PrintNotes(t4) end
+			for k, v in pairs(t4) do
+				reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)
+			end			
+			m.loopGlueF = false
+		
+		else -- not glueing
+			if debug or m.debug then ConMsg("no glueing, inserting shift table (t2)") end
+			for k, v in pairs(t2) do -- use the post-shifter table
+				if not v[9] then v[4] = v[4] - m.legato end -- handle legatolessness
+				reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)	
+			end -- for k, v t2
+		end -- m.loopGlueF
+		
+		reaper.MIDI_Sort(m.activeTake)
+		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+	end -- m.seqRepeatF
+
 end
 --------------------------------------------------------------------------------
 -- PrintNotes - arg note_buffer t; print note_buffer to reaper console
@@ -1480,6 +1478,24 @@ randomBtn.onLClick = function()
 		pExtSaveStateF = true
 	end --m.activeTake
 end 
+
+-- Set randomiser default options
+function SetDefaultRndOptions()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultRndOptions()") end
+	
+	-- if randomiser options were saved to project state, load them
+	if pExtState.noteOptionsCb then
+		m.rndAllNotesF =  pExtState.noteOptionsCb[1] == true and true or false 
+		m.rndFirstNoteF = pExtState.noteOptionsCb[2] == true and true or false
+		m.rndOctX2F =     pExtState.noteOptionsCb[3] == true and true or false
+		end
+
+	-- set randomiser options using defaults, or loaded project state
+	noteOptionsCb.val1[1] = (true and m.rndAllNotesF) and 1 or 0 -- all notes
+	noteOptionsCb.val1[2] = (true and m.rndFirstNoteF) and 1 or 0 -- first note root
+	noteOptionsCb.val1[3] = (true and m.rndOctX2F) and 1 or 0 -- octave doubler
+end
 -- Randomiser options toggle logic
 noteOptionsCb.onLClick = function()
 	local debug = false
@@ -1492,6 +1508,7 @@ noteOptionsCb.onLClick = function()
 	pExtSaveStateF = true
 	if debug or m.debug then PrintTable(noteOptionsCb.val1) end
 end
+
 -- Root Key droplist
 keyDrop.onLClick = function()
 	local debug = false
@@ -1565,24 +1582,8 @@ function SetDefaultScaleOpts()
 	SetScale(m.curScaleName, m.scales, m.preNoteProbTable)	--set chosen scale
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable) -- set sliders labels to current scale notes
 end
--- Set default randomiser options
-function SetDefaultRndOptions()
-	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultRndOptions()") end
-	
-	-- if randomiser options were saved to project state, load them
-	if pExtState.noteOptionsCb then
-		m.rndAllNotesF =  pExtState.noteOptionsCb[1] == true and true or false 
-		m.rndFirstNoteF = pExtState.noteOptionsCb[2] == true and true or false
-		m.rndOctX2F =     pExtState.noteOptionsCb[3] == true and true or false
-		end
 
-	-- set randomiser options using defaults, or loaded project state
-	noteOptionsCb.val1[1] = (true and m.rndAllNotesF) and 1 or 0 -- all notes
-	noteOptionsCb.val1[2] = (true and m.rndFirstNoteF) and 1 or 0 -- first note root
-	noteOptionsCb.val1[3] = (true and m.rndOctX2F) and 1 or 0 -- octave doubler
-end
--- Set default randomiser sliders
+-- Set randomiser note slider defaults
 function SetDefaultRndSliders()
 	local debug = false
 	if debug or m.debug then ConMsg("SetDefaultRndSliders()") end
@@ -1603,8 +1604,7 @@ function SetDefaultRndSliders()
 		octProbSldr.val1 = m.rndOctProb
 	end
 end
-
--- Reset note probability sliders
+-- Reset randomiser note sliders
 probSldrText.onRClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("probSldrText.onRClick()") end
@@ -1624,7 +1624,8 @@ probSldrText.onRClick = function()
 		pExtSaveStateF = true	-- set the ext state save flag
 	end -- result
 end
--- Reset octave probability slider
+
+-- Reset octave slider
 octProbText.onRClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("octProbText.onRClick()") end
@@ -1963,7 +1964,7 @@ seqShiftText.onRClick = function()
 	if debug or m.debug then ConMsg("seqShiftText.onRClick") end
 	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
-	local result = gfx.showmenu("Reset Note Shift")
+	local result = gfx.showmenu("Reset Note Shift|Glue Shift")
 
 	if result == 1 then
 		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
@@ -2265,18 +2266,73 @@ euclidBtn.onLClick = function()
 		pExtSaveStateF = true
 	end -- m.activeTake
 end
--- Euclidiser options
+
+-- Set euclid default options
+function SetDefaultEucOptions()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultEucOptions()") end
+	
+	-- if euclidean options were saved to project state, load them
+	if pExtState.eucOptionsCb then 
+		m.eucF         = pExtState.eucOptionsCb[1] ==  true and true or false
+		m.eucAccentF   = pExtState.eucOptionsCb[2] ==  true and true or false
+		m.eucRndNotesF = pExtState.eucOptionsCb[3] ==  true and true or false
+	end
+	
+	-- set euclidean options using defaults, or loaded project state
+	eucOptionsCb.val1[1] = (true and m.eucF) and 1 or 0 -- generate
+	eucOptionsCb.val1[2] = (true and m.eucAccentF) and 1 or 0 -- accents
+	eucOptionsCb.val1[3] = (true and m.eucRndNotesF) and 1 or 0 -- randomise notes
+end
+
+-- Euclidiser options logic
 eucOptionsCb.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("eucOptionsCb.onLClick()") end
 	
-	m.eucF = 				 eucOptionsCb.val1[1] == 1 and true or false -- Generate
-	m.eucAccentF = 	 eucOptionsCb.val1[2] == 1 and true or false -- Accent
+	m.eucF         = eucOptionsCb.val1[1] == 1 and true or false -- Generate
+	m.eucAccentF   = eucOptionsCb.val1[2] == 1 and true or false -- Accent
 	m.eucRndNotesF = eucOptionsCb.val1[3] == 1 and true or false -- Randomise notes
+	
 	pExtState.eucOptionsCb = {m.eucF, m.eucAccentF, m.eucRndNotesF}
 	pExtSaveStateF = true
 	if debug or m.debug then PrintTable(eucOptionsCb.val1) end
 end
+
+-- Set euclid slider defaults
+function SetDefaultEucSliders()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultEucSliders()") end
+	
+	-- if euclidean sliders were saved to project state, load them
+	if pExtState.eucSliders then
+		for k, v in pairs(t_euclidSliders) do
+			v.val1 = pExtState.eucSliders[k]
+		end
+	else
+	
+		euclidPulsesSldr.val1 = m.eucPulses
+		euclidStepsSldr.val1 = m.eucSteps
+		euclidRotationSldr.val1 = m.eucRot
+	end -- load pExtState
+end
+-- Reset euclid sliders
+txtEuclidLabel.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("txtEuclidLabel.onLClick()") end
+	
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Euclid Sliders")
+	
+	if result == 1 then 
+		euclidPulsesSldr.val1 = m.eucPulses
+		euclidStepsSldr.val1 = m.eucSteps
+		euclidRotationSldr.val1 = m.eucRot
+		pExtSaveStateF = true
+		pExtState.eucSliders = nil
+	end -- result
+end
+
 -- Euclid pulses slider 
 euclidPulsesSldr.onMove = function()
 	local debug = false
@@ -2314,57 +2370,6 @@ euclidRotationSldr.onMove = function()
 	end
 end
 
--- Set default euclid options
-function SetDefaultEucOptions()
-	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultEucOptions()") end
-	
-	-- if euclidean options were saved to project state, load them
-	if pExtState.eucOptionsCb then 
-		m.eucF = 					pExtState.eucOptionsCb[1] ==  true and true or false
-		m.eucAccentF = 		pExtState.eucOptionsCb[2] ==  true and true or false
-		m.eucRndNotesF = 	pExtState.eucOptionsCb[3] ==  true and true or false
-	end
-	
-	-- set euclidean options using defaults, or loaded project state
-	eucOptionsCb.val1[1] = (true and m.eucF) and 1 or 0 -- generate
-	eucOptionsCb.val1[2] = (true and m.eucAccentF) and 1 or 0 -- accents
-	eucOptionsCb.val1[3] = (true and m.eucRndNotesF) and 1 or 0 -- randomise notes
-end
--- Set default euclid sliders
-function SetDefaultEucSliders()
-	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultEucSliders()") end
-	
-	-- if euclidean sliders were saved to project state, load them
-	if pExtState.eucSliders then
-		for k, v in pairs(t_euclidSliders) do
-			v.val1 = pExtState.eucSliders[k]
-		end
-	else
-	
-		euclidPulsesSldr.val1 = m.eucPulses
-		euclidStepsSldr.val1 = m.eucSteps
-		euclidRotationSldr.val1 = m.eucRot
-	end -- load pExtState
-end
-
--- Reset euclidean sliders
-txtEuclidLabel.onRClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("txtEuclidLabel.onLClick()") end
-	
-	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
-	local result = gfx.showmenu("Reset Euclid Sliders")
-	
-	if result == 1 then 
-		euclidPulsesSldr.val1 = m.eucPulses
-		euclidStepsSldr.val1 = m.eucSteps
-		euclidRotationSldr.val1 = m.eucRot
-		pExtSaveStateF = true
-		pExtState.eucSliders = nil
-	end -- result
-end
 
 --------------------------------------------------------------------------------
 -- Draw GUI
@@ -2474,6 +2479,7 @@ function MainLoop()
 	end	
 	-- if resized, set scale flag and reset gfx
 	if m.zoomF == true then
+		if debug or m.debug then ConMsg("m.zoomF == true") end
 		e.gScaleState = true
 		gfx.quit()
 		InitGFX()
@@ -2511,10 +2517,13 @@ function MainLoop()
 		if m.activeTake then
 			m.currTakeID = string.sub(tostring(m.activeTake),11)
 			if m.currTakeID ~= m.lastTakeID then
+				if debug or m.debug then ConMsg("switched MIDI item...") end
 				m.lastTakeID = m.currTakeID
 				-- purge undo/redo buffers and grab new note data
 				m.notebuf.i = 1
 				PurgeNoteBuf()
+				t = GetNoteBuf()
+				ClearTable(t)
 				SetDefaultSeqShift()
 				SetDefaultSeqRepeat()
 				GetNotesFromTake()
