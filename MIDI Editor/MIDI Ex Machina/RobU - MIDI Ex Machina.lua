@@ -89,6 +89,7 @@ m.oct = 4; m.key = 1; m.root = 0 -- (options, except m.root)
 
 -- midi editor, take, grid
 m.activeEditor, m.activeTake = nil, nil
+m.currTakeID, m.lastTakeID = "", ""
 m.ppqn = 960; -- default ppqn, no idea how to check if this has been changed.. 
 m.reaGrid = 0
 
@@ -1698,7 +1699,7 @@ sequenceBtn.onLClick = function()
 			end
 		end
 		
-    m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Turn on repeat
+    m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn on repeat
 		InsertNotes()
 		pExtState.seqAccRSldrLo = seqAccRSldr.val1
 		pExtState.seqAccRSldrHi = seqAccRSldr.val2
@@ -1709,17 +1710,40 @@ sequenceBtn.onLClick = function()
 	end  --m.activeTake
 end
 
+-- Set sequencer options defaults
+function SetDefaultSeqOptions()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultSeqOptions()") end
+	
+	-- if sequencer options were saved to project state, load them
+	if pExtState.seqOptionsCb then 
+		m.seqF          = pExtState.seqOptionsCb[1] ==  true and true or false
+		m.seqFirstNoteF = pExtState.seqOptionsCb[2] ==  true and true or false
+		m.seqAccentF    = pExtState.seqOptionsCb[3] ==  true and true or false
+		m.seqLegatoF    = pExtState.seqOptionsCb[4] ==  true and true or false
+		m.seqRndNotesF  = pExtState.seqOptionsCb[5] ==  true and true or false
+		m.seqRepeatF    = pExtState.seqOptionsCb[6] ==  true and true or false
+	end
+	
+	-- set sequencer options using defaults, or loaded project state
+	seqOptionsCb.val1[1] = (true and m.seqF) and 1 or 0 -- generate
+	seqOptionsCb.val1[2] = (true and m.seqFirstNoteF) and 1 or 0 -- 1st Note Always
+	seqOptionsCb.val1[3] = (true and m.seqAccentF) and 1 or 0 -- accent
+	seqOptionsCb.val1[4] = (true and m.seqLegatoF) and 1 or 0 -- legato
+	seqOptionsCb.val1[5] = (true and m.seqRndNotesF) and 1 or 0 -- random notes
+	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0 -- repeat
+end
 -- Sequencer options toggle logic 
 seqOptionsCb.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("seqOptionsCb.onLClick()") end
 	
-	m.seqF = 					seqOptionsCb.val1[1] == 1 and true or false -- Generate
+	m.seqF          = seqOptionsCb.val1[1] == 1 and true or false -- Generate
 	m.seqFirstNoteF = seqOptionsCb.val1[2] == 1 and true or false -- 1st Note Always
-	m.seqAccentF = 		seqOptionsCb.val1[3] == 1 and true or false -- Accent
-	m.seqLegatoF = 		seqOptionsCb.val1[4] == 1 and true or false -- Legato
-	m.seqRndNotesF = 	seqOptionsCb.val1[5] == 1 and true or false -- Randomise Notes
-	m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Repeat
+	m.seqAccentF    = seqOptionsCb.val1[3] == 1 and true or false -- Accent
+	m.seqLegatoF    = seqOptionsCb.val1[4] == 1 and true or false -- Legato
+	m.seqRndNotesF  = seqOptionsCb.val1[5] == 1 and true or false -- Randomise Notes
+	m.seqRepeatF    = seqOptionsCb.val1[6] == 1 and true or false -- Repeat
 	
 	if pExtState.seqOptionsCb then
 		if pExtState.seqOptionsCb[6] ~= m.seqRepeatF then InsertNotes() end
@@ -1730,7 +1754,86 @@ seqOptionsCb.onLClick = function()
 	if debug or m.debug then PrintTable(seqOptionsCb.val1) end
 end
 
--- Sequencer grid radio button
+-- Set sequencer grid slider defaults
+function SetDefaultSeqGridSliders()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultSeqGridSliders()") end
+
+	GetReaperGrid(seqGridRad)
+	SetSeqGridSizes(t_seqSliders)	
+
+	if seqGridRad.val1 == 1 then
+		if pExtState.seqGrid16 then -- 1/16 grid
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = pExtState.seqGrid16[k]
+			end
+		else -- not pExtState.seqGrid16
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = m.seqGrid16[k]
+			end
+		end -- pExtState.seqGrid16
+
+	elseif seqGridRad.val1 == 2 then	
+		if pExtState.seqGrid8 then -- 1/8 grid
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = pExtState.seqGrid8[k]
+			end
+		else -- not pExtState.seqGrid8
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = m.seqGrid8[k]
+			end
+		end -- pExtState.seqGrid8
+
+	elseif seqGridRad.val1 == 3 then		
+		if pExtState.seqGrid4 then -- 1/4 grid
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = pExtState.seqGrid4[k]
+			end
+		else -- not pExtState.seqGrid4
+			for k, v in pairs(t_seqSliders) do
+				v.val1 = m.seqGrid4[k]
+			end
+		end 
+	end -- pExtState.seqGrid4
+	
+		if debug or m.debug then 
+			for k, v in pairs(t_seqSliders) do
+				ConMsg("t_seqSliders.val1 (4) = " .. tostring(v.val1))
+			end
+		end
+		
+end
+-- Reset sequencer grid sliders
+seqSldrText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("seqSldrText.onLClick()") end
+	
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Sequence Sliders")
+	if result == 1 then
+		if seqGridRad.val1 == 1 then -- 1/16ths
+			for k, v in pairs(t_seqSliders) do -- reset the sliders
+				v.val1 = m.seqGrid16[k]
+			end -- in pairs(t_seqSliders)
+			pExtState.seqGrid16 = nil
+			
+		elseif seqGridRad.val1 == 2 then -- 1/8ths
+			for k, v in pairs(t_seqSliders) do -- reset the sliders
+				v.val1 = m.seqGrid8[k]
+			end -- in pairs(t_seqSliders)
+			pExtState.seqGrid8 = nil
+			
+		elseif seqGridRad.val1 == 3 then -- 1/4ths
+			for k, v in pairs(t_seqSliders) do -- reset the sliders
+				v.val1 = m.seqGrid4[k]
+			end -- in pairs(t_seqSliders)
+			pExtState.seqGrid4 = nil
+			
+		end -- seqGridRad
+		pExtSaveStateF = true	-- set the ext state save flag
+	end -- result
+end
+-- Sequencer grid toggle logic
 seqGridRad.onLClick = function() -- change grid size
 	local debug = false
 	if debug or m.debug then ConMsg("seqGridRad.onLClick()") end
@@ -1784,7 +1887,91 @@ seqGridRad.onLClick = function() -- change grid size
 	end -- m.activeTake
 end
 
--- Sequencer shift left
+-- Set sequencer accent & legato slider defaults
+function SetDefaultAccLegSliders()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultAccLegSliders()") end
+	
+	-- if seq accent & legato sliders were saved to project state, load them
+	if pExtState.seqAccRSldrLo then 
+		seqAccRSldr.val1 = pExtState.seqAccRSldrLo
+	else
+		seqAccRSldr.val1 = m.accentLow
+	end
+	if pExtState.seqAccRSldrHi then 
+		seqAccRSldr.val2 = pExtState.seqAccRSldrHi
+	else
+		seqAccRSldr.val2 = m.accentHigh
+	end
+	if pExtState.seqAccProb then 
+		seqAccProbSldr.val1 = pExtState.seqAccProb
+	else
+		seqAccProbSldr.val1	= m.accentProb
+	end
+	if pExtState.seqLegProb then 
+		seqLegProbSldr.val1 = pExtState.seqLegProb
+	else
+		seqLegProbSldr.val1 = m.legatoProb
+	end
+end -- function
+-- Reset sequencer velocity slider
+seqAccSldrText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("seqAccSldrText.onRClick()") end
+	
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Accent Sliders")
+	
+	if result == 1 then 
+		seqAccRSldr.val1 = m.accentLow
+		if pExtState.seqAccRSldrLo then pExtState.seqAccRSldrLo = nil end		
+		seqAccRSldr.val2 = m.accentHigh
+		if pExtState.seqAccRSldrHi then pExtState.seqAccRSldrHi = nil end
+		seqAccProbSldr.val1 = m.accentProb
+		if pExtState.seqAccProb then pExtState.seqAccProb = nil end
+		pExtSaveStateF = true	-- set the ext state save flag
+	end -- result
+end
+-- Reset sequencer legato sliders
+seqLegSldrText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("seqLegSldrText.onLClick()") end
+	
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Legato Slider")
+	
+	if result == 1 then 
+		seqLegProbSldr.val1 = m.legatoProb
+		if pExtState.seqLegProb then pExtState.seqLegProb = nil end
+		pExtSaveStateF = true
+	end -- result
+end
+
+-- Set sequence shifter defaults
+function SetDefaultSeqShift()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultSeqShift()") end
+	
+	m.seqShift = 0
+	m.seqShiftMin = 0
+	m.seqShiftMax = 0
+	seqShiftVal.label = tostring(m.seqShift)
+end
+-- Reset sequence shifter state
+seqShiftText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("seqShiftText.onRClick") end
+	
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Note Shift")
+
+	if result == 1 then
+		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
+		seqShiftVal.label = tostring(m.seqShift)
+		InsertNotes()
+	end -- result
+end	
+-- Sequence shifter left
 seqShiftLBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("seqShiftLBtn()") end
@@ -1802,7 +1989,7 @@ seqShiftLBtn.onLClick = function()
 	seqShiftVal.label = tostring(m.seqShift)
 	InsertNotes()
 end
--- Sequencer shift right
+-- Sequence shifter right
 seqShiftRBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("seqShiftRBtn()") end
@@ -1821,7 +2008,92 @@ seqShiftRBtn.onLClick = function()
 	InsertNotes()
 end
 
--- Sequencer repeat start
+-- Set default sequencer repeater state
+function SetDefaultSeqRepeat()
+	local debug = false
+	if debug or m.debug then ConMsg("SetDefaultSeqRepeat()") end
+	
+	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
+	local gridSize = m.reaGrid * m.ppqn
+	local itemLength = GetItemLength()
+	
+	-- start
+	if pExtState.loopStartG then 
+		m.loopStartG = pExtState.loopStartG
+		seqLoopStartDrop.val1 = m.loopStartG
+	else
+		m.loopStartG = 1
+		seqLoopStartDrop.val1 = m.loopStartG		
+	end
+	
+	-- length
+	if pExtState.loopLenG then 
+		m.loopLenG = pExtState.loopLenG
+		seqLoopLenDrop.val1 = m.loopLenG
+	else
+		m.loopLenG = 1
+		seqLoopLenDrop.val1 = m.loopLenG		
+	end	
+	
+	-- amount
+	if pExtState.loopNum then 
+		m.loopNum = pExtState.loopNum
+		seqLoopNumDrop.val1 = m.loopNum
+	else
+		m.loopNum = 1
+		seqLoopNumDrop.val1 = m.loopNum		
+	end	
+
+	m.loopMaxRep = math.floor(itemLength / gridSize)	
+	
+	for i = 1, m.loopMaxRep do
+		seqLoopStartDrop.val2[i] = i
+		seqLoopNumDrop.val2[i] = i
+		seqLoopLenDrop.val2[i] = i
+	end
+end
+-- Reset sequencer repeater
+seqLoopText.onRClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("seqLoopText.onRClick") end
+	
+	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
+	local result = gfx.showmenu("Reset Repeat|Glue Repeat")
+
+	if result == 1 then 
+		-- reset the GUI and repeat flag
+		m.seqRepeatF = false 
+		seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
+		seqOptionsCb.onLClick()
+		-- reset the drop down lists and clear pExtState
+		seqLoopStartDrop.val1 = 1; m.loopStartG = 1
+		if pExtState.loopStartG then pExtState.loopStartG = nil end
+		seqLoopLenDrop.val1 = 1; m.loopLenG = 1
+		if pExtState.loopLenG then pExtState.loopLenG = nil end
+		seqLoopNumDrop.val1 = 1; m.loopNum = 1
+		if pExtState.loopNum then pExtState.loopNum = nil end
+		pExtSaveStateF = true	-- set the ext state save flag
+		InsertNotes()
+		
+	elseif result == 2 then
+		m.loopGlueF = true
+		InsertNotes()
+		-- reset the GUI and repeat flag
+		m.seqRepeatF = false 
+		seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0	
+		seqOptionsCb.onLClick()
+		-- reset the drop down lists and pExtState
+		seqLoopStartDrop.val1 = 1; m.loopStartG = 1
+		if pExtState.loopStartG then pExtState.loopStartG = nil end
+		seqLoopLenDrop.val1 = 1; m.loopLenG = 1
+		if pExtState.loopLenG then pExtState.loopLenG = nil end
+		seqLoopNumDrop.val1 = 1; m.loopNum = 1
+		if pExtState.loopNum then pExtState.loopNum = nil end
+		pExtSaveStateF = true	-- set the ext state save flag
+	end -- result
+	
+end -- onRClick
+-- Sequencer repeater functions
 seqLoopStartDrop.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("seqLoopStartDrop.onLClick()") end
@@ -1955,278 +2227,6 @@ seqLoopNumDrop.onLClick = function()
 	--pExtState.root = m.root
 	--pExtSaveStateF = true
 end
-
--- Set sequencer default options
-function SetDefaultSeqOptions()
-	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultSeqOptions()") end
-	
-	-- if sequencer options were saved to project state, load them
-	if pExtState.seqOptionsCb then 
-		m.seqF = 					pExtState.seqOptionsCb[1] ==  true and true or false
-		m.seqFirstNoteF = pExtState.seqOptionsCb[2] ==  true and true or false
-		m.seqAccentF = 		pExtState.seqOptionsCb[3] ==  true and true or false
-		m.seqLegatoF = 		pExtState.seqOptionsCb[4] ==  true and true or false
-		m.seqRndNotesF = 	pExtState.seqOptionsCb[5] ==  true and true or false
-		m.seqRepeatF = 		pExtState.seqOptionsCb[6] ==  true and true or false
-	end
-	
-	-- set sequencer options using defaults, or loaded project state
-	seqOptionsCb.val1[1] = (true and m.seqF) and 1 or 0 -- generate
-	seqOptionsCb.val1[2] = (true and m.seqFirstNoteF) and 1 or 0 -- 1st Note Always
-	seqOptionsCb.val1[3] = (true and m.seqAccentF) and 1 or 0 -- accent
-	seqOptionsCb.val1[4] = (true and m.seqLegatoF) and 1 or 0 -- legato
-	seqOptionsCb.val1[5] = (true and m.seqRndNotesF) and 1 or 0 -- random notes
-	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0 -- repeat
-end
--- Set default accent & legato sliders
-function SetDefaultAccLegSliders()
-	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultAccLegSliders()") end
-	
-	-- if seq accent & legato sliders were saved to project state, load them
-	if pExtState.seqAccRSldrLo then 
-		seqAccRSldr.val1 = pExtState.seqAccRSldrLo
-	else
-		seqAccRSldr.val1 = m.accentLow
-	end
-	if pExtState.seqAccRSldrHi then 
-		seqAccRSldr.val2 = pExtState.seqAccRSldrHi
-	else
-		seqAccRSldr.val2 = m.accentHigh
-	end
-	if pExtState.seqAccProb then 
-		seqAccProbSldr.val1 = pExtState.seqAccProb
-	else
-		seqAccProbSldr.val1	= m.accentProb
-	end
-	if pExtState.seqLegProb then 
-		seqLegProbSldr.val1 = pExtState.seqLegProb
-	else
-		seqLegProbSldr.val1 = m.legatoProb
-	end
-end -- function
--- Set default grid sliders
-function SetDefaultSeqGridSliders()
-	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultSeqGridSliders()") end
-
-	GetReaperGrid(seqGridRad)
-	SetSeqGridSizes(t_seqSliders)	
-
-	if seqGridRad.val1 == 1 then
-		if pExtState.seqGrid16 then -- 1/16 grid
-			for k, v in pairs(t_seqSliders) do
-				v.val1 = pExtState.seqGrid16[k]
-			end
-		else -- not pExtState.seqGrid16
-			for k, v in pairs(t_seqSliders) do
-				v.val1 = m.seqGrid16[k]
-			end
-		end -- pExtState.seqGrid16
-
-	elseif seqGridRad.val1 == 2 then	
-		if pExtState.seqGrid8 then -- 1/8 grid
-			for k, v in pairs(t_seqSliders) do
-				v.val1 = pExtState.seqGrid8[k]
-			end
-		else -- not pExtState.seqGrid8
-			for k, v in pairs(t_seqSliders) do
-				v.val1 = m.seqGrid8[k]
-			end
-		end -- pExtState.seqGrid8
-
-	elseif seqGridRad.val1 == 3 then		
-		if pExtState.seqGrid4 then -- 1/4 grid
-			for k, v in pairs(t_seqSliders) do
-				v.val1 = pExtState.seqGrid4[k]
-			end
-		else -- not pExtState.seqGrid4
-			for k, v in pairs(t_seqSliders) do
-				v.val1 = m.seqGrid4[k]
-			end
-		end 
-	end -- pExtState.seqGrid4
-	
-		if debug or m.debug then 
-			for k, v in pairs(t_seqSliders) do
-				ConMsg("t_seqSliders.val1 (4) = " .. tostring(v.val1))
-			end
-		end
-		
-end
--- Set default sequencer shift state
-function SetDefaultSeqShift()
-	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultSeqShift()") end
-	
-		m.seqShift = 0
-		m.seqShiftMin = 0
-		m.seqShiftMax = 0
-		seqShiftVal.label = tostring(m.seqShift)
-end
--- Set default sequencer repeat state
-function SetDefaultSeqRepeat()
-	local debug = false
-	if debug or m.debug then ConMsg("SetDefaultSeqRepeat()") end
-	
-	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
-	local gridSize = m.reaGrid * m.ppqn
-	local itemLength = GetItemLength()
-	
-	-- start
-	if pExtState.loopStartG then 
-		m.loopStartG = pExtState.loopStartG
-		seqLoopStartDrop.val1 = m.loopStartG
-	else
-		m.loopStartG = 1
-		seqLoopStartDrop.val1 = m.loopStartG		
-	end
-	
-	-- length
-	if pExtState.loopLenG then 
-		m.loopLenG = pExtState.loopLenG
-		seqLoopLenDrop.val1 = m.loopLenG
-	else
-		m.loopLenG = 1
-		seqLoopLenDrop.val1 = m.loopLenG		
-	end	
-	
-	-- amount
-	if pExtState.loopNum then 
-		m.loopNum = pExtState.loopNum
-		seqLoopNumDrop.val1 = m.loopNum
-	else
-		m.loopNum = 1
-		seqLoopNumDrop.val1 = m.loopNum		
-	end	
-
-	m.loopMaxRep = math.floor(itemLength / gridSize)	
-	
-	for i = 1, m.loopMaxRep do
-		seqLoopStartDrop.val2[i] = i
-		seqLoopNumDrop.val2[i] = i
-		seqLoopLenDrop.val2[i] = i
-	end
-end
-
--- Reset sequencer sections
-seqSldrText.onRClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("seqSldrText.onLClick()") end
-	
-	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
-	local result = gfx.showmenu("Reset Sequence Sliders")
-	if result == 1 then
-		if seqGridRad.val1 == 1 then -- 1/16ths
-			for k, v in pairs(t_seqSliders) do -- reset the sliders
-				v.val1 = m.seqGrid16[k]
-			end -- in pairs(t_seqSliders)
-			pExtState.seqGrid16 = nil
-			
-		elseif seqGridRad.val1 == 2 then -- 1/8ths
-			for k, v in pairs(t_seqSliders) do -- reset the sliders
-				v.val1 = m.seqGrid8[k]
-			end -- in pairs(t_seqSliders)
-			pExtState.seqGrid8 = nil
-			
-		elseif seqGridRad.val1 == 3 then -- 1/4ths
-			for k, v in pairs(t_seqSliders) do -- reset the sliders
-				v.val1 = m.seqGrid4[k]
-			end -- in pairs(t_seqSliders)
-			pExtState.seqGrid4 = nil
-			
-		end -- seqGridRad
-		pExtSaveStateF = true	-- set the ext state save flag
-	end -- result
-end
--- Reset sequencer velocity slider
-seqAccSldrText.onRClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("seqAccSldrText.onRClick()") end
-	
-	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
-	local result = gfx.showmenu("Reset Accent Sliders")
-	
-	if result == 1 then 
-		seqAccRSldr.val1 = m.accentLow
-		if pExtState.seqAccRSldrLo then pExtState.seqAccRSldrLo = nil end		
-		seqAccRSldr.val2 = m.accentHigh
-		if pExtState.seqAccRSldrHi then pExtState.seqAccRSldrHi = nil end
-		seqAccProbSldr.val1 = m.accentProb
-		if pExtState.seqAccProb then pExtState.seqAccProb = nil end
-		pExtSaveStateF = true	-- set the ext state save flag
-	end -- result
-end
--- Reset sequencer legato slider
-seqLegSldrText.onRClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("seqLegSldrText.onLClick()") end
-	
-	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
-	local result = gfx.showmenu("Reset Legato Slider")
-	
-	if result == 1 then 
-		seqLegProbSldr.val1 = m.legatoProb
-		if pExtState.seqLegProb then pExtState.seqLegProb = nil end
-		pExtSaveStateF = true
-	end -- result
-end
--- Reset sequencer shift
-seqShiftText.onRClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("seqShiftText.onRClick") end
-	
-	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
-	local result = gfx.showmenu("Reset Note Shift")
-
-	if result == 1 then
-		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
-		seqShiftVal.label = tostring(m.seqShift)
-		InsertNotes()
-	end -- result
-end	
--- Reset sequencer repeat
-seqLoopText.onRClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("seqLoopText.onRClick") end
-	
-	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
-	local result = gfx.showmenu("Reset Repeat|Glue Repeat")
-
-	if result == 1 then 
-		-- reset the GUI and repeat flag
-		m.seqRepeatF = false 
-		seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
-		seqOptionsCb.onLClick()
-		-- reset the drop down lists and clear pExtState
-		seqLoopStartDrop.val1 = 1; m.loopStartG = 1
-		if pExtState.loopStartG then pExtState.loopStartG = nil end
-		seqLoopLenDrop.val1 = 1; m.loopLenG = 1
-		if pExtState.loopLenG then pExtState.loopLenG = nil end
-		seqLoopNumDrop.val1 = 1; m.loopNum = 1
-		if pExtState.loopNum then pExtState.loopNum = nil end
-		pExtSaveStateF = true	-- set the ext state save flag
-		InsertNotes()
-		
-	elseif result == 2 then
-		m.loopGlueF = true
-		InsertNotes()
-		-- reset the GUI and repeat flag
-		m.seqRepeatF = false 
-		seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0	
-		seqOptionsCb.onLClick()
-		-- reset the drop down lists and pExtState
-		seqLoopStartDrop.val1 = 1; m.loopStartG = 1
-		if pExtState.loopStartG then pExtState.loopStartG = nil end
-		seqLoopLenDrop.val1 = 1; m.loopLenG = 1
-		if pExtState.loopLenG then pExtState.loopLenG = nil end
-		seqLoopNumDrop.val1 = 1; m.loopNum = 1
-		if pExtState.loopNum then pExtState.loopNum = nil end
-		pExtSaveStateF = true	-- set the ext state save flag
-	end -- result
-	
-end -- onRClick
 
 --------------------------------------------------------------------------------
 -- Euclidiser
@@ -2483,7 +2483,7 @@ function MainLoop()
 	DrawGUI()
 	e.gScaleState = false	-- prevent zoom code from running every loop
 	
-	-- Save last mouse state since GUI was refreshed
+	-- Save or reset last mouse state since GUI was refreshed
 	gLastMouseCap = gfx.mouse_cap
 	gLastMouseX, gLastMouseY = gfx.mouse_x, gfx.mouse_y
 	gfx.mouse_wheel = 0 -- reset gfx.mouse_wheel
@@ -2509,6 +2509,16 @@ function MainLoop()
 	if m.activeEditor then
 		m.activeTake = reaper.MIDIEditor_GetTake(m.activeEditor)
 		if m.activeTake then
+			m.currTakeID = string.sub(tostring(m.activeTake),11)
+			if m.currTakeID ~= m.lastTakeID then
+				m.lastTakeID = m.currTakeID
+				-- purge undo/redo buffers and grab new note data
+				m.notebuf.i = 1
+				PurgeNoteBuf()
+				SetDefaultSeqShift()
+				SetDefaultSeqRepeat()
+				GetNotesFromTake()
+			end
 			ShowMessage(msgText, 0) -- clear old messages
 			-- check for changes in the active take if the "Permute" scale is selected
 			if scaleDrop.val2[scaleDrop.val1] == "Permute" then 
