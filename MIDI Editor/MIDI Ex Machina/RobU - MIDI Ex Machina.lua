@@ -88,7 +88,7 @@ m.defFont = e.Lucinda; m.defFontSz = 15
 m.oct = 4; m.key = 1; m.root = 0 -- (options, except m.root)
 
 -- midi editor, take, grid
-m.activeEditor, m.activeTake = nil, nil
+m.activeEditor, m.activeTake, m.mediaItem = nil, nil, nil
 m.currTakeID, m.lastTakeID = "", ""
 m.ppqn = 960; -- default ppqn, no idea how to check if this has been changed.. 
 m.reaGrid = 0
@@ -427,22 +427,25 @@ function GetItemLength()
 	if debug or m.debug then ConMsg("GetItemLength()") end
 	
 	mItem = reaper.GetSelectedMediaItem(0, 0)
-	mItemLen = reaper.GetMediaItemInfo_Value(mItem, "D_LENGTH")
-	mBPM, mBPI = reaper.GetProjectTimeSignature2(0)
-	msPerMin = 60000
-	msPerQN = msPerMin / mBPM
-	numQNPerItem = (mItemLen * 1000) / msPerQN
-	numBarsPerItem = numQNPerItem / 4
-	ItemPPQN = numQNPerItem * m.ppqn
-	if debug or m.debug then
-		--ConMsg("ItemLen (ms)    = " .. mItemLen)
-		--ConMsg("mBPM            = " .. mBPM)
-		--ConMsg("MS Per QN       = " .. msPerQN)
-		ConMsg("Num of QNs      = " .. numQNPerItem)
-		ConMsg("Num of Measures = " .. numBarsPerItem)
-		ConMsg("Itemlen (ppqn)  = " .. ItemPPQN)
+	if mItem then
+		if debug or m.debug then ConMsg("mItem = " .. tostring(mItem)) end
+		mItemLen = reaper.GetMediaItemInfo_Value(mItem, "D_LENGTH")
+		mBPM, mBPI = reaper.GetProjectTimeSignature2(0)
+		msPerMin = 60000
+		msPerQN = msPerMin / mBPM
+		numQNPerItem = (mItemLen * 1000) / msPerQN
+		numBarsPerItem = numQNPerItem / 4
+		ItemPPQN = numQNPerItem * m.ppqn
+		if debug or m.debug then
+			--ConMsg("ItemLen (ms)    = " .. mItemLen)
+			--ConMsg("mBPM            = " .. mBPM)
+			--ConMsg("MS Per QN       = " .. msPerQN)
+			--ConMsg("Num of QNs      = " .. numQNPerItem)
+			--ConMsg("Num of Measures = " .. numBarsPerItem)
+			ConMsg("Itemlen (ppqn)  = " .. ItemPPQN)
+		end
+		return math.floor(ItemPPQN)
 	end
-	return math.floor(ItemPPQN)
 end
 --------------------------------------------------------------------------------
 -- GetReaperGrid() - get the current grid size, set global var m.reaGrid
@@ -2412,11 +2415,20 @@ function InitMidiExMachina()
 	-- grab the midi editor, and active take
 	m.activeEditor = reaper.MIDIEditor_GetActive()
 	if m.activeEditor then
+		if debug or m.debug then ConMsg("activeEditor = " .. tostring(m.activeEditor)) end
 		m.activeTake = reaper.MIDIEditor_GetTake(m.activeEditor)
-		__ = NewNoteBuf()
+		if m.activeTake then
+			if debug or m.debug then ConMsg("activeTake = " .. tostring(m.activeTake)) end
+			__ = NewNoteBuf()
+			-- get the take's parent media item
+			m.mediaItem = reaper.GetMediaItemTake_Item(m.activeTake)
+			reaper.SetMediaItemSelected(m.mediaItem, true)
+			reaper.UpdateArrange()
+			-- get some item info
+			GetItemLength()
+			GetNotesFromTake() -- grab the original note data (if any...)
+		end
 		if not m.activeTake then ConMsg("InitMidiExMachina() - No Active Take") end
-	else
-		ConMsg("InitMidiMachina() - No Active MIDI Editor")
 	end -- m.activeEditor
 	
 	-- Load ProjectExtState
@@ -2427,9 +2439,7 @@ function InitMidiExMachina()
 			end -- pExtStateStr
 		end -- pExtLoadStateF
 	
-	-- get some item info
-	GetItemLength()
-	GetNotesFromTake() -- grab the original note data (if any...)	
+
 	
 	-- set GUI defaults or restore from project state
 	SetDefaultWindowOpts();	SetDefaultLayer() 
