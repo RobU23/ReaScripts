@@ -2511,16 +2511,20 @@ function MainLoop()
 	-- Defer 'MainLoop' if not explicitly quiting (esc)
 	if char ~= -1 and char ~= 27 then 
 		reaper.defer(MainLoop) 
-	elseif pExtSaveStateF then -- quiting, save script state
-		pExtStateStr = pickle(pExtState)
-		reaper.SetProjExtState(0, "MEM", "pExtState", pExtStateStr )
-		--pExtSaveStateF = false
+	else
+		-- reset the shifter and repeater
+		-- add code here...
+		if pExtSaveStateF then -- quiting, save script state
+			pExtStateStr = pickle(pExtState)
+			reaper.SetProjExtState(0, "MEM", "pExtState", pExtStateStr )
+			--pExtSaveStateF = false
+		end
 	end
 	
 	-- Update Reaper GFX
 	gfx.update()
 	
-	-- check for midi editor and take
+	-- check for midi editor, take, and media item
 	m.activeEditor = reaper.MIDIEditor_GetActive()
 	if m.activeEditor then
 		m.activeTake = reaper.MIDIEditor_GetTake(m.activeEditor)
