@@ -413,8 +413,7 @@ local function PurgeNoteBuf()
 	
 	while m.notebuf.max > m.notebuf.i do
 		m.notebuf[m.notebuf.max] = nil
-		if debug or m.debug then ConMsg("purging buffer " .. tostring(m.notebuf.max))
-		end
+		if debug or m.debug then ConMsg("purging buffer " .. tostring(m.notebuf.max)) end
 		m.notebuf.max = m.notebuf.max - 1
 	end  
 end
@@ -456,6 +455,7 @@ function GetReaperGrid(gridRad)
 	
 	if m.activeTake then
 		m.reaGrid, __, __ = reaper.MIDI_GetGrid(m.activeTake) -- returns quarter notes
+		if debug or m.debug then ConMsg("m.reaGrid = " .. tostring(m.reaGrid)) end
 		if gridRad then -- if a grid object was passed, update it
 			if m.reaGrid == 0.25 then gridRad.val1 = 1 -- 1/16
 			elseif m.reaGrid == 0.5 then gridRad.val1 = 2 -- 1/8
@@ -495,7 +495,7 @@ end
 --------------------------------------------------------------------------------
 function GetNotesFromTake()
 	local debug = false
-	if debug or m.debug then ConMsg("\nGetNotesFromTake()") end
+	if debug or m.debug then ConMsg("GetNotesFromTake()") end
 	
 	local i, t
 	if m.activeTake then
@@ -523,7 +523,7 @@ function GetNotesFromTake()
 				t[i][9] = rem == 0 and true or false
 			end -- for i				
 		end -- num_notes
-		if debug or m.debug then PrintNotes(t) end
+		if debug and m.debug then PrintNotes(t) end
 	else -- no active take
 		if debug or m.debug then ConMsg("No Active Take") end
 	end -- m.activeTake
@@ -645,7 +645,6 @@ end
 --------------------------------------------------------------------------------
 function SetScale(scaleName, allScales, scale)
 	local debug = false
-	if debug or m.debug then ConMsg("SetScale()") end
 	
 	ClearTable(scale)
 	for i = 1, #allScales, 1 do
@@ -662,7 +661,7 @@ function SetScale(scaleName, allScales, scale)
 			break
 		end
 	end
-	if debug or m.debug then ConMsg("scaleName = " .. tostring(scaleName)) end
+	if debug or m.debug then ConMsg("SetScale() - scaleName = " .. tostring(scaleName)) end
 end
 --------------------------------------------------------------------------------
 -- SetSeqGridSizes()  
@@ -749,13 +748,13 @@ end
 --------------------------------------------------------------------------------
 function RandomiseNotesPoly(noteProbTable)
 	local debug = false
-	if debug or m.debug then ConMsg("\nRandomiseNotesPoly()") end
+	if debug or m.debug then ConMsg("RandomiseNotesPoly()") end
 	
 	m.dupes.i = 1
 	local  i = 1
 	local t1, t2 = GetNoteBuf(), NewNoteBuf()
 	CopyTable(t1, t2)
-	if debug or m.debug then PrintNotes(t1) end	
+	if debug and m.debug then PrintNotes(t1) end	
 	
 	while t2[i] do
 		if t2[i][1] == true or m.rndAllNotesF then -- if selected, or all notes flag is true
@@ -769,7 +768,7 @@ function RandomiseNotesPoly(noteProbTable)
 	end -- while t1[i]
 	
 	PurgeNoteBuf()
-	if debug or m.debug then PrintNotes(t2) end
+	if debug and m.debug then PrintNotes(t2) end
 	InsertNotes()
 	if m.rndPermuteF and m.activeTake then 
 		__, pHash = reaper.MIDI_GetHash(m.activeTake, false, 0)
@@ -781,7 +780,7 @@ end
 --------------------------------------------------------------------------------
 function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 	local debug = false
-	if debug or m.debug then ConMsg("\nGenSequence()") end
+	if debug or m.debug then ConMsg("GenSequence()") end
 	
 	local t = NewNoteBuf()
 	GetReaperGrid() -- populates m.reaGrid
@@ -839,7 +838,7 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 		end -- newNote
 		
 	end -- itemPos < itemLength
-	if debug or m.debug then PrintNotes(t) end
+	if debug and m.debug then PrintNotes(t) end
 	PurgeNoteBuf()
 	--if not m.seqRndNotesF then InsertNotes() end
 	InsertNotes()
@@ -849,7 +848,7 @@ end
 --------------------------------------------------------------------------------
 function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 	local debug = false
-	if debug or m.debug then ConMsg("\nGenBjorklund()") end
+	if debug or m.debug then ConMsg("GenBjorklund()") end
 	
 	local floor = math.floor
 	local t, t2 = NewNoteBuf(), GetNoteBuf()
@@ -911,7 +910,7 @@ end
 --------------------------------------------------------------------------------
 function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 	local debug = false
-	if debug or m.debug then ConMsg("\nGenNoteAttributes()") end
+	if debug or m.debug then ConMsg("GenNoteAttributes()") end
 	
 	if not accF and not legF then return end
 	local t1, t2 = GetNoteBuf(), NewNoteBuf()
@@ -1061,7 +1060,7 @@ function InsertNotes()
 		if m.loopGlueF then
 			if debug or m.debug then ConMsg("Glueing...") end	
 			t4 = NewNoteBuf(); CopyTable(t3, t4)
-			if debug or m.debug then PrintNotes(t4) end
+			if debug and m.debug then PrintNotes(t4) end
 			for k, v in pairs(t4) do
 				reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)
 			end			
@@ -1294,7 +1293,7 @@ local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqShi
 -- Window zoom droplist
 zoomDrop.onLClick = function() -- window scaling
 	local debug = false
-	if debug or m.debug then ConMsg("zoomDrop.onLClick()") end
+	if debug or m.debug then ConMsg("\nzoomDrop.onLClick()") end
 	
 	    if zoomDrop.val1 ==  1 then e.gScale = 0.7
 	elseif zoomDrop.val1 ==  2 then e.gScale = 0.8
@@ -1322,7 +1321,7 @@ end
 -- Layer 1 button
 layerBtn01.onLClick = function() -- randomiser
 	local debug = false
-	if debug or m.debug then ConMsg("layerBtn01.onLClick() (note randomiser)") end
+	if debug or m.debug then ConMsg("\nlayerBtn01.onLClick() (note randomiser)") end
 	
 	e.gActiveLayer = 1 
 	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_green)
@@ -1343,7 +1342,7 @@ end
 -- Layer 2 button
 layerBtn02.onLClick = function() -- sequencer
 	local debug = false
-	if debug or m.debug then ConMsg("layerBtn02.onLClick() (sequencer)") end
+	if debug or m.debug then ConMsg("\nlayerBtn02.onLClick() (sequencer)") end
 	
 	e.gActiveLayer = 2
 	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_yellow)
@@ -1364,7 +1363,7 @@ end
 -- Layer 3 button
 layerBtn03.onLClick = function() -- euclidean
 	local debug = false
-	if debug or m.debug then ConMsg("layerBtn03.onLClick() (euclid)") end
+	if debug or m.debug then ConMsg("\nlayerBtn03.onLClick() (euclid)") end
 	
 	e.gActiveLayer = 3
 	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_orange)
@@ -1385,7 +1384,7 @@ end
 -- Layer 4 button
 layerBtn04.onLClick = function() -- options
 	local debug = false
-	if debug or m.debug then ConMsg("layerBtn04.onLClick() (options)") end
+	if debug or m.debug then ConMsg("\nlayerBtn04.onLClick() (options)") end
 	
 	e.gActiveLayer = 4
 	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_grey5)
@@ -1406,7 +1405,7 @@ end
 -- Undo button
 undoBtn.onLClick = function() -- undo
 	local debug = false
-	if debug or m.debug then ConMsg("undoBtn.onLClick()") end
+	if debug or m.debug then ConMsg("\nundoBtn.onLClick()") end
 	
 	UndoNoteBuf()
 	InsertNotes()
@@ -1415,7 +1414,7 @@ end
 -- Redo button
 redoBtn.onLClick = function() -- redo
 	local debug = false
-	if debug or m.debug then ConMsg("redoBtn.onLClick()") end
+	if debug or m.debug then ConMsg("\nredoBtn.onLClick()") end
 	
 	if m.notebuf[m.notebuf.i + 1] ~= nil then
 		--PrintNotes(m.notebuf[m.notebuf.i + 1])
@@ -1423,7 +1422,7 @@ redoBtn.onLClick = function() -- redo
 		InsertNotes()
 		--PrintNotes(m.notebuf[m.notebuf.i])
 	else
-		if debug or m.debug then ConMsg("\nnothing to redo...") end  
+		if debug or m.debug then ConMsg("nothing to redo...") end  
 	end
 end
 -- Set default window options
@@ -1515,7 +1514,7 @@ end
 -- Root Key droplist
 keyDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("keyDrop.onLClick()") end
+	if debug or m.debug then ConMsg("\nkeyDrop.onLClick()") end
 	
 	m.key = keyDrop.val1
 	m.root = SetRootNote(m.oct, m.key)	
@@ -1528,7 +1527,7 @@ end
 -- Octave droplist
 octDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("octDrop.onLClick()") end
+	if debug or m.debug then ConMsg("\noctDrop.onLClick()") end
 	
 	m.oct = octDrop.val1
 	m.root = SetRootNote(m.oct, m.key)
@@ -1540,7 +1539,7 @@ end
 -- Scale droplist
 scaleDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("scaleDrop.onLClick()") end
+	if debug or m.debug then ConMsg("\nscaleDrop.onLClick()") end
 	SetScale(scaleDrop.val2[scaleDrop.val1], m.scales, m.preNoteProbTable)
 	if m.rndPermuteF then 
 		noteOptionsCb.val1[1] = 0
@@ -1610,7 +1609,7 @@ end
 -- Reset randomiser note sliders
 probSldrText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("probSldrText.onRClick()") end
+	if debug or m.debug then ConMsg("\nprobSldrText.onRClick()") end
 	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Note Sliders")
@@ -1631,7 +1630,7 @@ end
 -- Reset octave slider
 octProbText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("octProbText.onRClick()") end
+	if debug or m.debug then ConMsg("\noctProbText.onRClick()") end
 	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Octave Slider")
@@ -1810,7 +1809,7 @@ end
 -- Reset sequencer grid sliders
 seqSldrText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("seqSldrText.onLClick()") end
+	if debug or m.debug then ConMsg("\nseqSldrText.onLClick()") end
 	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Sequence Sliders")
@@ -1840,7 +1839,7 @@ end
 -- Sequencer grid toggle logic
 seqGridRad.onLClick = function() -- change grid size
 	local debug = false
-	if debug or m.debug then ConMsg("seqGridRad.onLClick()") end
+	if debug or m.debug then ConMsg("\nseqGridRad.onLClick()") end
 	
 	if m.activeTake then
 	
@@ -1921,7 +1920,7 @@ end -- function
 -- Reset sequencer velocity slider
 seqAccSldrText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("seqAccSldrText.onRClick()") end
+	if debug or m.debug then ConMsg("\nseqAccSldrText.onRClick()") end
 	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Accent Sliders")
@@ -1939,7 +1938,7 @@ end
 -- Reset sequencer legato sliders
 seqLegSldrText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("seqLegSldrText.onLClick()") end
+	if debug or m.debug then ConMsg("\nseqLegSldrText.onLClick()") end
 	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Legato Slider")
@@ -1964,7 +1963,7 @@ end
 -- Reset sequence shifter state
 seqShiftText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("seqShiftText.onRClick") end
+	if debug or m.debug then ConMsg("\nseqShiftText.onRClick") end
 	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Note Shift|Glue Shift")
@@ -1978,7 +1977,7 @@ end
 -- Sequence shifter left
 seqShiftLBtn.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("seqShiftLBtn()") end
+	if debug or m.debug then ConMsg("\nseqShiftLBtn()") end
 	
 	local gridSize = m.reaGrid * m.ppqn
 	local itemLength = GetItemLength()
@@ -1996,7 +1995,7 @@ end
 -- Sequence shifter right
 seqShiftRBtn.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("seqShiftRBtn()") end
+	if debug or m.debug then ConMsg("\nseqShiftRBtn()") end
 	
 	local gridSize = m.reaGrid * m.ppqn
 	local itemLength = GetItemLength()
@@ -2059,7 +2058,7 @@ end
 -- Reset sequencer repeater
 seqLoopText.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("seqLoopText.onRClick") end
+	if debug or m.debug then ConMsg("\nseqLoopText.onRClick") end
 	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Repeat|Glue Repeat")
@@ -2100,7 +2099,7 @@ end -- onRClick
 -- Sequencer repeater functions
 seqLoopStartDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("seqLoopStartDrop.onLClick()") end
+	if debug or m.debug then ConMsg("\nseqLoopStartDrop.onLClick()") end
 	
 	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
 	local gridSizeP = m.reaGrid * m.ppqn
@@ -2152,7 +2151,7 @@ end
 -- Sequencer repeat length
 seqLoopLenDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("seqLoopLenDrop.onLClick()") end
+	if debug or m.debug then ConMsg("\nseqLoopLenDrop.onLClick()") end
 	
 	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
 	local gridSizeP = m.reaGrid * m.ppqn
@@ -2197,7 +2196,7 @@ end
 -- Sequencer repeat amount
 seqLoopNumDrop.onLClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("seqLoopNumDrop.onLClick()") end
+	if debug or m.debug then ConMsg("\nseqLoopNumDrop.onLClick()") end
 	
 	GetReaperGrid() -- sets m.reaGrid (.25 / 0.5 / 0.1)
 	local gridSizeP = m.reaGrid * m.ppqn
@@ -2322,7 +2321,7 @@ end
 -- Reset euclid sliders
 txtEuclidLabel.onRClick = function()
 	local debug = false
-	if debug or m.debug then ConMsg("txtEuclidLabel.onLClick()") end
+	if debug or m.debug then ConMsg("\ntxtEuclidLabel.onLClick()") end
 	
 	gfx.x = gfx.mouse_x; gfx.y = gfx.mouse_y
 	local result = gfx.showmenu("Reset Euclid Sliders")
@@ -2449,7 +2448,7 @@ function InitMidiExMachina()
 	SetDefaultSeqGridSliders(); SetDefaultAccLegSliders()
 	SetDefaultEucOptions(); SetDefaultEucSliders()
 
-	if debug or m.debug then ConMsg("End InitMidiExMachina()\n") end
+	if debug or m.debug then ConMsg("End InitMidiExMachina()") end
 end
 --------------------------------------------------------------------------------
 -- InitGFX
