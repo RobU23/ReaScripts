@@ -939,6 +939,110 @@ function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 	InsertNotes()
 end
 --------------------------------------------------------------------------------
+-- SeqRepeater() - repeat a range of notes x times
+--------------------------------------------------------------------------------
+function SeqRepeater(t1)
+	local debug = false
+	if debug or m.debug then ConMsg("SeqRepeater()") end
+	
+	local gridSize = math.floor(m.reaGrid * m.ppqn)
+	local itemLenP = GetItemLength()	
+	local t2 = nil
+
+	-- note repeater
+	if m.loopGlueF then
+		if debug or m.debug then ConMsg("Repeater glued...") end
+		t2 = NewNoteBuf() -- new buffer for repeating
+		m.loopGlueF = false
+	else
+		if debug or m.debug then ConMsg("Repeater not glued...") end
+		t2 = {} -- temp table for repeating
+	end
+	
+	local loopStartP = (m.loopStartG -1) * gridSize
+	local loopLenP = m.loopLenG * gridSize
+	local loopEndP = loopStartP + loopLenP
+	local loopNum = m.loopNum
+	local i = 1
+	local writeOffP = 0
+	if loopStartP > 0 then writeOffP = -loopStartP else writeOffP = 0 end
+
+	-- pre-repeat
+	if debug or m.debug then ConMsg("pre repeat ...") end
+	for k, v in pairs(t1) do 
+		if v[3] >= 0 and v[3] < loopStartP then
+			t2[i] = {}
+			t2[i][1] = v[1] -- selected
+			t2[i][2] = v[2] -- muted
+			t2[i][3] = v[3] -- startppqn					
+			t2[i][4] = v[4] -- endppqn
+			if not t2[i][9] then t2[i][4] = t2[i][4] - m.legato end -- handle legatolessness
+			t2[i][5] = v[5] -- length
+			t2[i][6] = v[6] -- channel
+			t2[i][7] = v[7] -- pitch
+			t2[i][8] = v[8] -- vel
+			t2[i][9] = v[9] -- legato
+			reaper.MIDI_InsertNote(m.activeTake, t2[i][1], t2[i][2], t2[i][3], t2[i][4], t2[i][6], t2[i][7], t2[i][8], false)
+			i = i + 1
+		end
+	end -- k, v in pairs(t1) - pre-repeat
+	writeOffP = writeOffP + loopStartP
+	
+	-- repeat
+	if debug or m.debug then ConMsg("repeat ...") end
+	while loopNum > 0 do
+		for k, v in pairs(t1) do
+			if v[3] >= loopStartP and v[3] < loopEndP then
+				t2[i] = {}
+				t2[i][1] = v[1] -- selected 
+				t2[i][2] = v[2] -- muted
+				t2[i][3] = v[3] + writeOffP -- startppqn
+				if v[4] > loopEndP then t2[i][4] = loopEndP + writeOffP else t2[i][4] = v[4] + writeOffP end -- endppqn
+				if not t2[i][9] then t2[i][4] = t2[i][4] - m.legato end -- handle legatolessness
+				t2[i][5] = v[5] -- length
+				t2[i][6] = v[6] -- channel
+				t2[i][7] = v[7] -- pitch
+				t2[i][8] = v[8] -- vel
+				t2[i][9] = v[9] -- legato
+				reaper.MIDI_InsertNote(m.activeTake, t2[i][1], t2[i][2], t2[i][3], t2[i][4], t2[i][6], t2[i][7], t2[i][8], false)
+				i = i + 1
+			end -- if v[3]
+			
+		end -- for k, v t1 - repeat
+		loopNum = loopNum - 1
+		writeOffP = writeOffP + loopLenP
+	end -- while loopNum > 0
+
+	-- post-repeat
+	if debug or m.debug then ConMsg("post repeat ...") end
+	local written = loopStartP + (loopLenP * m.loopNum)	
+	local remLenP = itemLenP - written	
+	local readStartP = loopStartP + loopLenP
+	local readEndP = readStartP + remLenP
+	local writeOffP = written - readStartP
+	
+	for k, v in pairs(t1) do
+		if v[3] >= readStartP and v[3] < readEndP then
+			t2[i] = {}
+			t2[i][1] = v[1] -- selected 
+			t2[i][2] = v[2] -- muted
+			t2[i][3] = v[3] + writeOffP -- startppqn
+			if v[4] > itemLenP then t2[i][4] = itemLenP else t2[i][4] = v[4] + writeOffP end -- endppqn
+			if not t2[i][9] then t2[i][4] = t2[i][4] - m.legato end -- handle legatolessness
+			t2[i][5] = v[5] -- channel
+			t2[i][6] = v[6] -- channel
+			t2[i][7] = v[7] -- pitch
+			t2[i][8] = v[8] -- vel
+			t2[i][9] = v[9] -- legato
+			reaper.MIDI_InsertNote(m.activeTake, t2[i][1], t2[i][2], t2[i][3], t2[i][4], t2[i][6], t2[i][7], t2[i][8], false)
+			i = i + 1
+		end			
+	end -- k, v in pairs(t1) - post-repeat
+	
+	return t2
+		
+end
+--------------------------------------------------------------------------------
 -- InsertNotes() - insert current note buffer in the active take
 --------------------------------------------------------------------------------
 function InsertNotes()
@@ -948,146 +1052,48 @@ function InsertNotes()
 	local gridSize = math.floor(m.reaGrid * m.ppqn)
 	local itemLenP = GetItemLength()	
 	local noteShift = math.floor(m.seqShift * gridSize)
-	local t1, t2, t3, t4 = GetNoteBuf(), nil, nil, nil
+	local t1, t2, t3 = GetNoteBuf(), nil, nil
 
 	-- note shifter
-	if debug or m.debug then ConMsg("Not glueing shifter...") end
-	t2 = {} -- temp table for note shifter (no undo)
+	if m.shiftGlueF then
+		if debug or m.debug then ConMsg("Shifter glued ...") end	
+		t2 = NewNoteBuf() -- new note buffer for glueing
+		m.shiftGlueF = false
+	else
+		if debug or m.debug then ConMsg("Shifter not glued ...") end		
+		t2 = {} -- temp table for note shifter (no undo)
+	end
+
 	CopyTable(t1, t2)		
 	for k, v in pairs(t2) do
 		v[3] = v[3] + noteShift
 		v[4] = v[4] + noteShift
-		
 		if v[3] < 0 then
 			v[3] = itemLenP + v[3]
 			v[4] = itemLenP + v[4]
 			if v[4] > itemLenP then v[4] = itemLenP end
-		
 		elseif v[3] >= itemLenP then
 			v[3] = v[3] - itemLenP
 			v[4] = v[4] - itemLenP
 		end
 	end -- for k, v t2
 
-			
 	-- note repeater
-	if m.seqRepeatF then
-		if debug or m.debug then ConMsg("Repeating...") end
-		DeleteNotes()
-		t3 = {} -- temp table for note repeater (for glueing)
-		local loopStartP = (m.loopStartG -1) * gridSize
-		local loopLenP = m.loopLenG * gridSize
-		local loopEndP = loopStartP + loopLenP
-		local loopNum = m.loopNum
-		local i = 1
-		local writeOffP = 0
-		if loopStartP > 0 then writeOffP = -loopStartP else writeOffP = 0 end
+	if m.seqRepeatF then 
+		t3 = SeqRepeater(t2)
+	else
+		t3 = {}; CopyTable(t2, t3)
+	end
 
-		-- pre-repeat
-		for k, v in pairs(t2) do 
-			if v[3] >= 0 and v[3] < loopStartP then
-				t3[i] = {}
-				t3[i][1] = v[1] -- selected
-				t3[i][2] = v[2] -- muted
-				t3[i][3] = v[3] -- startppqn					
-				t3[i][4] = v[4] -- endppqn
-				if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
-				t3[i][5] = v[5] -- length
-				t3[i][6] = v[6] -- channel
-				t3[i][7] = v[7] -- pitch
-				t3[i][8] = v[8] -- vel
-				t3[i][9] = v[9] -- legato
-				reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
-				i = i + 1
-			end
-		end -- k, v in pairs(t2) - pre-repeat
-		writeOffP = writeOffP + loopStartP
+	DeleteNotes()
+	for k, v in pairs(t3) do
+		if not v[9] then v[4] = v[4] - m.legato end -- handle legatolessness
+		reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)	
+	end -- for k, v t3
 		
-		-- repeat
-		while loopNum > 0 do
-			for k, v in pairs(t2) do
-				if v[3] >= loopStartP and v[3] < loopEndP then
-					t3[i] = {}
-					t3[i][1] = v[1] -- selected 
-					t3[i][2] = v[2] -- muted
-					t3[i][3] = v[3] + writeOffP -- startppqn
-					if v[4] > loopEndP then t3[i][4] = loopEndP + writeOffP else t3[i][4] = v[4] + writeOffP end -- endppqn
-					if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
-					t3[i][5] = v[5] -- length
-					t3[i][6] = v[6] -- channel
-					t3[i][7] = v[7] -- pitch
-					t3[i][8] = v[8] -- vel
-					t3[i][9] = v[9] -- legato
-					reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
-					i = i + 1
-				end -- if v[3]
-				
-			end -- for k, v t3 - repeat
-			loopNum = loopNum - 1
-			writeOffP = writeOffP + loopLenP
-		end -- while loopNum > 0
-
-		-- post-repeat
-		local written = loopStartP + (loopLenP * m.loopNum)	
-		local remLenP = itemLenP - written	
-		local readStartP = loopStartP + loopLenP
-		local readEndP = readStartP + remLenP
-		local writeOffP = written - readStartP
-		
-		for k, v in pairs(t2) do
-			if v[3] >= readStartP and v[3] < readEndP then
-				t3[i] = {}
-				t3[i][1] = v[1] -- selected 
-				t3[i][2] = v[2] -- muted
-				t3[i][3] = v[3] + writeOffP -- startppqn
-				if v[4] > itemLenP then t3[i][4] = itemLenP else t3[i][4] = v[4] + writeOffP end -- endppqn
-				if not t3[i][9] then t3[i][4] = t3[i][4] - m.legato end -- handle legatolessness
-				t3[i][5] = v[5] -- channel
-				t3[i][6] = v[6] -- channel
-				t3[i][7] = v[7] -- pitch
-				t3[i][8] = v[8] -- vel
-				t3[i][9] = v[9] -- legato
-				reaper.MIDI_InsertNote(m.activeTake, t3[i][1], t3[i][2], t3[i][3], t3[i][4], t3[i][6], t3[i][7], t3[i][8], false)
-				i = i + 1
-			end			
-		end -- k, v in pairs(t2) - post-repeat
-		
-		reaper.MIDI_Sort(m.activeTake)
-		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
-		
-	else -- not m.seqRepeatF
-		if debug or m.debug then ConMsg("No repeat...") end
-		DeleteNotes()
-		
-		if m.loopGlueF then
-			if debug or m.debug then ConMsg("Glueing repeater...") end	
-			t4 = NewNoteBuf(); CopyTable(t3, t4)
-			if debug and m.debug then PrintNotes(t4) end
-			for k, v in pairs(t4) do
-				reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)
-			m.loopGlueF = false
-			end
-		
-		else -- not glueing repeater
-			if debug or m.debug then ConMsg("no glueing repeater, inserting shift table (t2)") end
-			for k, v in pairs(t2) do -- use the post-shifter table
-				if not v[9] then v[4] = v[4] - m.legato end -- handle legatolessness
-				reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)	
-			end -- for k, v t2
-		end -- m.loopGlueF
-		
-		reaper.MIDI_Sort(m.activeTake)
-		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
-	end -- m.seqRepeatF
-
-		     if m.shiftGlueF then
-			-- glue using t2 and new note buf
-		elseif m.loopGlueF then
-			-- glue using t3 and new note buf
-		else -- no glueing going on
-		end
-		
-		
+	reaper.MIDI_Sort(m.activeTake)
+	reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+	
 end
 --------------------------------------------------------------------------------
 -- PrintNotes - arg note_buffer t; print note_buffer to reaper console
@@ -1987,14 +1993,13 @@ end
 function GlueSeqShifter()
 	local debug = false
 	if debug or m.debug then ConMsg("GlueSeqShifter()") end
-	if debug or m.debug then ConMsg("TBC...") end
 	m.shiftGlueF = true
 	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn off repeat
 	InsertNotes()
 	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
 	seqShiftVal.label = tostring(m.seqShift)
     m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn on repeat
-	InsertNotes()	
+	InsertNotes()
 end
 -- Right-click handler
 seqShiftText.onRClick = function()
@@ -2114,17 +2119,21 @@ end
 function GlueSeqRepeater()
 	local debug = false
 	if debug or m.debug then ConMsg("GlueSeqRepeater()") end
-	m.loopGlueF = true
+	m.loopGlueF = true		
 	InsertNotes()
+	
+	-- reset the shifter (implicit when glueing the loop)
+	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
+	seqShiftVal.label = tostring(m.seqShift)	
+	
 	-- reset the GUI and repeat flag
 	m.seqRepeatF = false 
 	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0	
 	seqOptionsCb.onLClick()
+	
 	-- reset the drop down lists and pExtState
 	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
-	-- reset the shifter (implicit when glueing the loop)
-	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
-	seqShiftVal.label = tostring(m.seqShift)
+
 	-- reset the program ext state	
 	if pExtState.loopStartG then pExtState.loopStartG = nil end
 	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
