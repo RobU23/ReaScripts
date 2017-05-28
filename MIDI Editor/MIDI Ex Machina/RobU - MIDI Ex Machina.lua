@@ -116,6 +116,7 @@ m.seqGrid16 = {8, 8, 0, 4} -- sane default sequencer note length slider values
 m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
 m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
 m.seqShift = 0; m.seqShiftMin = -16; m.seqShiftMax = 16 -- shift notes left-right from sequencer
+m.shiftGlueF = false
 m.loopStartG, m.loopLenG, m.loopNum, m.loopMaxRep = 0, 0, 0, 0 -- repeat values for GUI
 m.t_loopStart, m.t_loopNum, m.t_loopLen = {}, {}, {} -- repeat value tables
 m.loopGlueF = false
@@ -944,30 +945,31 @@ function InsertNotes()
 	local debug = false
 	if debug or m.debug then ConMsg("InsertNotes()") end
 	
-	local i = 1
-
 	local gridSize = math.floor(m.reaGrid * m.ppqn)
 	local itemLenP = GetItemLength()	
 	local noteShift = math.floor(m.seqShift * gridSize)
-	local t1 = GetNoteBuf()	
+	local t1, t2, t3, t4 = GetNoteBuf(), nil, nil, nil
 
 	-- note shifter
-	if debug or m.debug then ConMsg("Shifting...") end
-	local t2 = {} -- temp table for note shifter (no undo)
+	if debug or m.debug then ConMsg("Not glueing shifter...") end
+	t2 = {} -- temp table for note shifter (no undo)
 	CopyTable(t1, t2)		
 	for k, v in pairs(t2) do
 		v[3] = v[3] + noteShift
 		v[4] = v[4] + noteShift
+		
 		if v[3] < 0 then
 			v[3] = itemLenP + v[3]
 			v[4] = itemLenP + v[4]
 			if v[4] > itemLenP then v[4] = itemLenP end
+		
 		elseif v[3] >= itemLenP then
 			v[3] = v[3] - itemLenP
 			v[4] = v[4] - itemLenP
 		end
 	end -- for k, v t2
 
+			
 	-- note repeater
 	if m.seqRepeatF then
 		if debug or m.debug then ConMsg("Repeating...") end
@@ -1058,16 +1060,16 @@ function InsertNotes()
 		DeleteNotes()
 		
 		if m.loopGlueF then
-			if debug or m.debug then ConMsg("Glueing...") end	
+			if debug or m.debug then ConMsg("Glueing repeater...") end	
 			t4 = NewNoteBuf(); CopyTable(t3, t4)
 			if debug and m.debug then PrintNotes(t4) end
 			for k, v in pairs(t4) do
 				reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)
-			end			
 			m.loopGlueF = false
+			end
 		
-		else -- not glueing
-			if debug or m.debug then ConMsg("no glueing, inserting shift table (t2)") end
+		else -- not glueing repeater
+			if debug or m.debug then ConMsg("no glueing repeater, inserting shift table (t2)") end
 			for k, v in pairs(t2) do -- use the post-shifter table
 				if not v[9] then v[4] = v[4] - m.legato end -- handle legatolessness
 				reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)	
@@ -1078,6 +1080,14 @@ function InsertNotes()
 		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
 	end -- m.seqRepeatF
 
+		     if m.shiftGlueF then
+			-- glue using t2 and new note buf
+		elseif m.loopGlueF then
+			-- glue using t3 and new note buf
+		else -- no glueing going on
+		end
+		
+		
 end
 --------------------------------------------------------------------------------
 -- PrintNotes - arg note_buffer t; print note_buffer to reaper console
@@ -1653,7 +1663,7 @@ sequenceBtn.onLClick = function()
 	if debug or m.debug then ConMsg("\nsequenceBtn.onLClick()") end
 	
 	if m.activeTake then 
-		m.seqRepeatF = 		seqOptionsCb.val1[6] == 1 and true or false -- Turn off repeat
+		m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn off repeat
 		InsertNotes()
 		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
 		seqShiftVal.label = tostring(m.seqShift)	
@@ -1960,7 +1970,33 @@ function SetDefaultSeqShift()
 	m.seqShiftMax = 0
 	seqShiftVal.label = tostring(m.seqShift)
 end
--- Reset sequence shifter state
+-- Reset sequence shifter
+function ResetSeqShifter()
+	local debug = false
+	if debug or m.debug then ConMsg("ResetSeqShifter()") end
+		
+	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
+	seqShiftVal.label = tostring(m.seqShift)
+	if debug or m.debug then 
+		ConMsg("Reset m.seqShift, m.seqShiftMin, m.seqShiftMax to 0")
+		ConMsg("Reset shifter label to m.seqShift")
+	end
+	InsertNotes()
+end
+-- Glue sequence shifter
+function GlueSeqShifter()
+	local debug = false
+	if debug or m.debug then ConMsg("GlueSeqShifter()") end
+	if debug or m.debug then ConMsg("TBC...") end
+	m.shiftGlueF = true
+	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn off repeat
+	InsertNotes()
+	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
+	seqShiftVal.label = tostring(m.seqShift)
+    m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn on repeat
+	InsertNotes()	
+end
+-- Right-click handler
 seqShiftText.onRClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nseqShiftText.onRClick") end
@@ -1969,9 +2005,9 @@ seqShiftText.onRClick = function()
 	local result = gfx.showmenu("Reset Note Shift|Glue Shift")
 
 	if result == 1 then
-		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
-		seqShiftVal.label = tostring(m.seqShift)
-		InsertNotes()
+		ResetSeqShifter()
+	elseif result == 2 then
+		GlueSeqShifter()
 	end -- result
 end	
 -- Sequence shifter left
@@ -2056,6 +2092,48 @@ function SetDefaultSeqRepeat()
 	end
 end
 -- Reset sequencer repeater
+function ResetSeqRepeater()
+	local debug = false
+	if debug or m.debug then ConMsg("ResetSeqRepeater()") end
+	-- reset the GUI and repeat flag
+	m.seqRepeatF = false 
+	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
+	seqOptionsCb.onLClick() -- why ???
+	-- reset the drop down lists and clear pExtState
+	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
+	-- reset the program ext state
+	if pExtState.loopStartG then pExtState.loopStartG = nil end
+	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
+	if pExtState.loopLenG then pExtState.loopLenG = nil end
+	seqLoopNumDrop.val1 = 1; m.loopNum = 1
+	if pExtState.loopNum then pExtState.loopNum = nil end
+	pExtSaveStateF = true	-- set the ext state save flag
+	InsertNotes()
+end
+-- Glue sequencer repeater
+function GlueSeqRepeater()
+	local debug = false
+	if debug or m.debug then ConMsg("GlueSeqRepeater()") end
+	m.loopGlueF = true
+	InsertNotes()
+	-- reset the GUI and repeat flag
+	m.seqRepeatF = false 
+	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0	
+	seqOptionsCb.onLClick()
+	-- reset the drop down lists and pExtState
+	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
+	-- reset the shifter (implicit when glueing the loop)
+	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
+	seqShiftVal.label = tostring(m.seqShift)
+	-- reset the program ext state	
+	if pExtState.loopStartG then pExtState.loopStartG = nil end
+	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
+	if pExtState.loopLenG then pExtState.loopLenG = nil end
+	seqLoopNumDrop.val1 = 1; m.loopNum = 1
+	if pExtState.loopNum then pExtState.loopNum = nil end
+	pExtSaveStateF = true	-- set the ext state save flag
+end
+-- Right-click handler
 seqLoopText.onRClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nseqLoopText.onRClick") end
@@ -2064,35 +2142,9 @@ seqLoopText.onRClick = function()
 	local result = gfx.showmenu("Reset Repeat|Glue Repeat")
 
 	if result == 1 then 
-		-- reset the GUI and repeat flag
-		m.seqRepeatF = false 
-		seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
-		seqOptionsCb.onLClick()
-		-- reset the drop down lists and clear pExtState
-		seqLoopStartDrop.val1 = 1; m.loopStartG = 1
-		if pExtState.loopStartG then pExtState.loopStartG = nil end
-		seqLoopLenDrop.val1 = 1; m.loopLenG = 1
-		if pExtState.loopLenG then pExtState.loopLenG = nil end
-		seqLoopNumDrop.val1 = 1; m.loopNum = 1
-		if pExtState.loopNum then pExtState.loopNum = nil end
-		pExtSaveStateF = true	-- set the ext state save flag
-		InsertNotes()
-		
+		ResetSeqRepeater()
 	elseif result == 2 then
-		m.loopGlueF = true
-		InsertNotes()
-		-- reset the GUI and repeat flag
-		m.seqRepeatF = false 
-		seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0	
-		seqOptionsCb.onLClick()
-		-- reset the drop down lists and pExtState
-		seqLoopStartDrop.val1 = 1; m.loopStartG = 1
-		if pExtState.loopStartG then pExtState.loopStartG = nil end
-		seqLoopLenDrop.val1 = 1; m.loopLenG = 1
-		if pExtState.loopLenG then pExtState.loopLenG = nil end
-		seqLoopNumDrop.val1 = 1; m.loopNum = 1
-		if pExtState.loopNum then pExtState.loopNum = nil end
-		pExtSaveStateF = true	-- set the ext state save flag
+		GlueSeqRepeater()
 	end -- result
 	
 end -- onRClick
@@ -2479,13 +2531,7 @@ function MainLoop()
 	Shift = gfx.mouse_cap & 8  == 8
 	Alt   = gfx.mouse_cap & 16 == 16
 	
-	-- Check and save window position
-	__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
-	if m.win_x ~= pExtState.win_x or m.win_y ~= pExtState.win_y then	
-		m.win_x = pExtState.win_x
-		m.win_y = pExtState.win_y
-		pExtSaveStateF = true
-	end	
+
 	-- if resized, set scale flag and reset gfx
 	if m.zoomF == true then
 		if debug or m.debug then ConMsg("m.zoomF == true") end
@@ -2511,8 +2557,17 @@ function MainLoop()
 	if char ~= -1 and char ~= 27 then 
 		reaper.defer(MainLoop) 
 	else
-		-- reset the shifter and repeater
-		-- add code here...
+		-- reset the shifter and repeater here...
+		ResetSeqRepeater()
+		ResetSeqShifter()
+		-- Check and save window position
+		__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
+		if m.win_x ~= pExtState.win_x or m.win_y ~= pExtState.win_y then	
+			m.win_x = pExtState.win_x
+			m.win_y = pExtState.win_y
+			pExtSaveStateF = true
+		end	
+		
 		if pExtSaveStateF then -- quiting, save script state
 			pExtStateStr = pickle(pExtState)
 			reaper.SetProjExtState(0, "MEM", "pExtState", pExtStateStr )
