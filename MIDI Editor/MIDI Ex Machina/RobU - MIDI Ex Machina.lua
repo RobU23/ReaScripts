@@ -755,6 +755,7 @@ function RandomiseNotesPoly(noteProbTable)
 	local  i = 1
 	local t1, t2 = GetNoteBuf(), NewNoteBuf()
 	CopyTable(t1, t2)
+	
 	if debug and m.debug then PrintNotes(t1) end	
 	
 	while t2[i] do
@@ -1476,25 +1477,39 @@ end
 randomBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nrandomBtn.onLClick()") end
+		if not m.activeTake then return end
+
+	-- backup and turn off shift
+	local t_shift = table.pack(m.seqShift, m.seqShiftMin, m.seqShiftMax)
+	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift
+	seqShiftVal.label = tostring(m.seqShift)
 	
-	if m.activeTake then
-		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift
-		seqShiftVal.label = tostring(m.seqShift)
-		GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
-		if #m.noteProbTable == 0 then return end
-		GenOctaveTable(m.octProbTable, octProbSldr)
-		GetNotesFromTake() 
-		RandomiseNotesPoly(m.noteProbTable)
-		-- set project ext state	
-		pExtState.noteSliders = {}
-		
-		for k, v in pairs(t_noteSliders) do
-			pExtState.noteSliders[k] = v.val1
-		end
-		
-		pExtState.rndOctProb = octProbSldr.val1
-		pExtSaveStateF = true
-	end --m.activeTake
+	-- turn off repeat
+	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false
+	
+	GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
+	if #m.noteProbTable == 0 then return end
+	GenOctaveTable(m.octProbTable, octProbSldr)
+	GetNotesFromTake() 
+	RandomiseNotesPoly(m.noteProbTable)
+	
+	-- restore and turn shift back on
+	m.seqShift, m.seqShiftMin, m.seqShiftMax = table.unpack(t_shift)
+	seqShiftVal.label = tostring(m.seqShift)
+	 -- turn on repeat
+    m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false
+	InsertNotes()
+	
+	-- set project ext state	
+	pExtState.noteSliders = {}
+	
+	for k, v in pairs(t_noteSliders) do
+		pExtState.noteSliders[k] = v.val1
+	end
+	
+	pExtState.rndOctProb = octProbSldr.val1
+	pExtSaveStateF = true
+	
 end 
 
 -- Set randomiser default options
@@ -1667,66 +1682,70 @@ end
 sequenceBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nsequenceBtn.onLClick()") end
+	if not m.activeTake then return end
 	
-	if m.activeTake then 
-		m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn off repeat
+	-- backup and turn off shift
+	local t_shift = table.pack(m.seqShift, m.seqShiftMin, m.seqShiftMax)
+	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
+	seqShiftVal.label = tostring(m.seqShift)
+	-- turn off repeat
+	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false
+	InsertNotes()
+
+	if m.seqF then
+		SetSeqGridSizes(t_seqSliders)
+		GenProbTable(m.preSeqProbTable, t_seqSliders, m.seqProbTable)
+		GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
+		GenLegatoTable(m.legProbTable, seqLegProbSldr)
+		GetNotesFromTake()
+		GenSequence(m.seqProbTable, m.accProbTable, seqAccRSldr, m.legProbTable)
+    
+	else -- not m.seqF
+		GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
+		GenLegatoTable(m.legProbTable, seqLegProbSldr)
+		GetNotesFromTake() 
+		GenNoteAttributes(m.seqAccentF, m.accProbTable, seqAccRSldr, m.seqLegatoF, m.legProbTable)
+		
+		-- restore and turn shift back on
+		m.seqShift, m.seqShiftMin, m.seqShiftMax = table.unpack(t_shift)
+		seqShiftVal.label = tostring(m.seqShift)
 		InsertNotes()
-		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
-		seqShiftVal.label = tostring(m.seqShift)	
-		
-		if m.seqF then
-			SetSeqGridSizes(t_seqSliders)
-			GenProbTable(m.preSeqProbTable, t_seqSliders, m.seqProbTable)
-			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
-			GenLegatoTable(m.legProbTable, seqLegProbSldr)
-			GetNotesFromTake()
-			GenSequence(m.seqProbTable, m.accProbTable, seqAccRSldr, m.legProbTable)
-			if m.seqRndNotesF then 
-				randomBtn.onLClick() -- call RandomiseNotes
-			end
-			
-		else -- not m.seqF
-			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
-			GenLegatoTable(m.legProbTable, seqLegProbSldr)
-			GetNotesFromTake() 
-			GenNoteAttributes(m.seqAccentF, m.accProbTable, seqAccRSldr, m.seqLegatoF, m.legProbTable)  
-			
-			if m.seqRndNotesF then
-				randomBtn.onLClick() -- call RandomiseNotes
-			end
-		end  -- m.seqF
-		
-		-- set project ext state
-		if seqGridRad.val1 == 1 then -- 1/16 grid
-			pExtState.seqGrid16 = {}
-			for k, v in pairs (t_seqSliders) do
-				pExtState.seqGrid16[k] = v.val1
-			end
+	end  -- m.seqF
+	
+	-- turn on repeat
+	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false	
+	
+	if m.seqRndNotesF then
+		randomBtn.onLClick() -- call RandomiseNotes
+	end
+
+	-- set project ext state
+	if seqGridRad.val1 == 1 then -- 1/16 grid
+		pExtState.seqGrid16 = {}
+		for k, v in pairs (t_seqSliders) do
+			pExtState.seqGrid16[k] = v.val1
 		end
-		
-		if seqGridRad.val1 == 2 then -- 1/8 grid
-			pExtState.seqGrid8 = {}
-			for k, v in pairs (t_seqSliders) do
-				pExtState.seqGrid8[k] = v.val1
-			end
+	end
+	
+	if seqGridRad.val1 == 2 then -- 1/8 grid
+		pExtState.seqGrid8 = {}
+		for k, v in pairs (t_seqSliders) do
+			pExtState.seqGrid8[k] = v.val1
 		end
-		
-		if seqGridRad.val1 == 3 then -- 1/4 grid
-			pExtState.seqGrid4 = {}
-			for k, v in pairs (t_seqSliders) do
-				pExtState.seqGrid4[k] = v.val1
-			end
+	end
+	
+	if seqGridRad.val1 == 3 then -- 1/4 grid
+		pExtState.seqGrid4 = {}
+		for k, v in pairs (t_seqSliders) do
+			pExtState.seqGrid4[k] = v.val1
 		end
+	end
 		
-    m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn on repeat
-		InsertNotes()
-		pExtState.seqAccRSldrLo = seqAccRSldr.val1
-		pExtState.seqAccRSldrHi = seqAccRSldr.val2
-		pExtState.seqAccProb = seqAccProbSldr.val1
-		pExtState.seqLegProb = seqLegProbSldr.val1
-		
-		pExtSaveStateF = true
-	end  --m.activeTake
+	pExtState.seqAccRSldrLo = seqAccRSldr.val1
+	pExtState.seqAccRSldrHi = seqAccRSldr.val2
+	pExtState.seqAccProb = seqAccProbSldr.val1
+	pExtState.seqLegProb = seqLegProbSldr.val1
+	pExtSaveStateF = true
 end
 
 -- Set sequencer options defaults
