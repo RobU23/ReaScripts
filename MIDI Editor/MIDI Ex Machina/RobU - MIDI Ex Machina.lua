@@ -106,7 +106,8 @@ m.seqFirstNoteF = true -- first note always (option)
 m.seqAccentF = true -- generate accents (option)
 m.seqLegatoF = false -- use legato (option)
 m.seqRndNotesF = true -- randomise notes (option) 
-m.seqRepeatF = false -- repeat sequence by grid length (option - not implemented yet)
+m.seqRepeatF = false -- repeat sequence by grid length
+m.seqShiftF = false -- shift sequence by grid length
 m.legato = 10 -- default legatolessness value
 m.legQ = 240
 m.accentLow = 100; m.accentHigh = 127; m.accentProb = 3 -- default values (options)
@@ -501,7 +502,7 @@ function GetNotesFromTake()
 	local i, t
 	if m.activeTake then
 		local _retval, num_notes, num_cc, num_sysex = reaper.MIDI_CountEvts(m.activeTake)
-		if num_notes > 0 then 
+		if num_notes > 0 then
 			t = GetNoteBuf(); if t == nil then t = NewNoteBuf() end
 			local div, rem, noteLen
 			ClearTable(t)
@@ -525,6 +526,7 @@ function GetNotesFromTake()
 			end -- for i				
 		end -- num_notes
 		if debug and m.debug then PrintNotes(t) end
+		return t
 	else -- no active take
 		if debug or m.debug then ConMsg("No Active Take") end
 	end -- m.activeTake
@@ -807,7 +809,6 @@ function GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 		if newNote == -1 then
 			itemPos = itemPos + gridSize
 			restCount = restCount + 1
-		
 		else
 			noteStart = itemPos
 			noteLen = newNote * m.ppqn
@@ -853,10 +854,8 @@ function GenBjorklund(pulses, steps, rotation, accProbTable, accSlider)
 	if debug or m.debug then ConMsg("GenBjorklund()") end
 	
 	local floor = math.floor
-	local t, t2 = NewNoteBuf(), GetNoteBuf()
-	CopyTable(t2, t)
+	local t = NewNoteBuf()
 	GetReaperGrid() -- populates m.reaGrid
-	--t = GetNoteBuf(); if t == nil then t = NewNoteBuf() end -- pre-undo
 	ClearTable(t)
 	local itemPos = 0
 	local gridSize = m.reaGrid * m.ppqn
@@ -938,6 +937,45 @@ function GenNoteAttributes(accF, accProbTable, accSlider, legF, legProbTable)
 	if debug and m.debug then PrintNotes(t2) end
 	PurgeNoteBuf()
 	InsertNotes()
+end
+
+--------------------------------------------------------------------------------
+-- SeqShifter() - shift notes left / right
+--------------------------------------------------------------------------------
+function SeqShifter(t1)
+	local debug = false
+	if debug or m.debug then ConMsg("SeqShifter()") end
+	
+	local gridSize = math.floor(m.reaGrid * m.ppqn)
+	local itemLenP = GetItemLength()	
+	local noteShift = math.floor(m.seqShift * gridSize)
+	local t2 = nil
+	
+	-- note shifter
+	if m.shiftGlueF then
+		if debug or m.debug then ConMsg("Shifter glued ...") end	
+		t2 = NewNoteBuf() -- new note buffer for glueing
+		m.shiftGlueF = false
+	else
+		if debug or m.debug then ConMsg("Shifter not glued ...") end		
+		t2 = {} -- temp table for note shifter (no undo)
+	end
+
+	CopyTable(t1, t2)		
+	for k, v in pairs(t2) do
+		v[3] = v[3] + noteShift
+		v[4] = v[4] + noteShift
+		if v[3] < 0 then
+			v[3] = itemLenP + v[3]
+			v[4] = itemLenP + v[4]
+			if v[4] > itemLenP then v[4] = itemLenP end
+		elseif v[3] >= itemLenP then
+			v[3] = v[3] - itemLenP
+			v[4] = v[4] - itemLenP
+		end
+	end -- for k, v t2
+	
+	return t2
 end
 --------------------------------------------------------------------------------
 -- SeqRepeater() - repeat a range of notes x times
@@ -1050,34 +1088,14 @@ function InsertNotes()
 	local debug = false
 	if debug or m.debug then ConMsg("InsertNotes()") end
 	
-	local gridSize = math.floor(m.reaGrid * m.ppqn)
-	local itemLenP = GetItemLength()	
-	local noteShift = math.floor(m.seqShift * gridSize)
 	local t1, t2, t3 = GetNoteBuf(), nil, nil
 
 	-- note shifter
-	if m.shiftGlueF then
-		if debug or m.debug then ConMsg("Shifter glued ...") end	
-		t2 = NewNoteBuf() -- new note buffer for glueing
-		m.shiftGlueF = false
+	if m.seqShiftF then
+		t2 = SeqShifter(t1)
 	else
-		if debug or m.debug then ConMsg("Shifter not glued ...") end		
-		t2 = {} -- temp table for note shifter (no undo)
+		t2 = {}; CopyTable(t1, t2)
 	end
-
-	CopyTable(t1, t2)		
-	for k, v in pairs(t2) do
-		v[3] = v[3] + noteShift
-		v[4] = v[4] + noteShift
-		if v[3] < 0 then
-			v[3] = itemLenP + v[3]
-			v[4] = itemLenP + v[4]
-			if v[4] > itemLenP then v[4] = itemLenP end
-		elseif v[3] >= itemLenP then
-			v[3] = v[3] - itemLenP
-			v[4] = v[4] - itemLenP
-		end
-	end -- for k, v t2
 
 	-- note repeater
 	if m.seqRepeatF then 
@@ -1490,7 +1508,7 @@ randomBtn.onLClick = function()
 	GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
 	if #m.noteProbTable == 0 then return end
 	GenOctaveTable(m.octProbTable, octProbSldr)
-	GetNotesFromTake() 
+	GetNotesFromTake()
 	RandomiseNotesPoly(m.noteProbTable)
 	
 	-- restore and turn shift back on
@@ -1502,14 +1520,11 @@ randomBtn.onLClick = function()
 	
 	-- set project ext state	
 	pExtState.noteSliders = {}
-	
 	for k, v in pairs(t_noteSliders) do
 		pExtState.noteSliders[k] = v.val1
 	end
-	
 	pExtState.rndOctProb = octProbSldr.val1
 	pExtSaveStateF = true
-	
 end 
 
 -- Set randomiser default options
@@ -1726,21 +1741,18 @@ sequenceBtn.onLClick = function()
 			pExtState.seqGrid16[k] = v.val1
 		end
 	end
-	
 	if seqGridRad.val1 == 2 then -- 1/8 grid
 		pExtState.seqGrid8 = {}
 		for k, v in pairs (t_seqSliders) do
 			pExtState.seqGrid8[k] = v.val1
 		end
 	end
-	
 	if seqGridRad.val1 == 3 then -- 1/4 grid
 		pExtState.seqGrid4 = {}
 		for k, v in pairs (t_seqSliders) do
 			pExtState.seqGrid4[k] = v.val1
 		end
-	end
-		
+	end	
 	pExtState.seqAccRSldrLo = seqAccRSldr.val1
 	pExtState.seqAccRSldrHi = seqAccRSldr.val2
 	pExtState.seqAccProb = seqAccProbSldr.val1
@@ -2002,6 +2014,7 @@ function ResetSeqShifter()
 		
 	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
 	seqShiftVal.label = tostring(m.seqShift)
+	m.seqShiftF = false
 	if debug or m.debug then 
 		ConMsg("Reset m.seqShift, m.seqShiftMin, m.seqShiftMax to 0")
 		ConMsg("Reset shifter label to m.seqShift")
@@ -2017,6 +2030,7 @@ function GlueSeqShifter()
 	InsertNotes()
 	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
 	seqShiftVal.label = tostring(m.seqShift)
+	m.seqShiftF = false
     m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn on repeat
 	InsertNotes()
 end
@@ -2045,8 +2059,10 @@ seqShiftLBtn.onLClick = function()
 	
 	if m.seqShift <= m.seqShiftMin then
 		m.seqShift = 0
+		m.seqShiftF = false
 	else
 		m.seqShift = m.seqShift - 1
+		m.seqShiftF = true
 	end
 	
 	seqShiftVal.label = tostring(m.seqShift)
@@ -2063,8 +2079,10 @@ seqShiftRBtn.onLClick = function()
 
 	if m.seqShift >= m.seqShiftMax then 
 		m.seqShift = 0
+		m.seqShiftF = false
 	else
 		m.seqShift = m.seqShift + 1
+		m.seqShiftF = true
 	end	
 
 	seqShiftVal.label = tostring(m.seqShift)
@@ -2081,33 +2099,18 @@ function SetDefaultSeqRepeat()
 	local itemLength = GetItemLength()
 	
 	-- start
-	if pExtState.loopStartG then 
-		m.loopStartG = pExtState.loopStartG
-		seqLoopStartDrop.val1 = m.loopStartG
-	else
 		m.loopStartG = 1
-		seqLoopStartDrop.val1 = m.loopStartG		
-	end
+		seqLoopStartDrop.val1 = m.loopStartG
 	
 	-- length
-	if pExtState.loopLenG then 
-		m.loopLenG = pExtState.loopLenG
-		seqLoopLenDrop.val1 = m.loopLenG
-	else
 		m.loopLenG = 1
-		seqLoopLenDrop.val1 = m.loopLenG		
-	end	
+		seqLoopLenDrop.val1 = m.loopLenG	
 	
 	-- amount
-	if pExtState.loopNum then 
-		m.loopNum = pExtState.loopNum
-		seqLoopNumDrop.val1 = m.loopNum
-	else
 		m.loopNum = 1
-		seqLoopNumDrop.val1 = m.loopNum		
-	end	
+		seqLoopNumDrop.val1 = m.loopNum
 
-	m.loopMaxRep = math.floor(itemLength / gridSize)	
+	m.loopMaxRep = math.floor(itemLength / gridSize)
 	
 	for i = 1, m.loopMaxRep do
 		seqLoopStartDrop.val2[i] = i
@@ -2122,16 +2125,11 @@ function ResetSeqRepeater()
 	-- reset the GUI and repeat flag
 	m.seqRepeatF = false 
 	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
-	seqOptionsCb.onLClick() -- why ???
-	-- reset the drop down lists and clear pExtState
+	seqOptionsCb.onLClick() -- will insert notes from the last buffer if necessary
+	-- reset the drop down lists
 	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
-	-- reset the program ext state
-	if pExtState.loopStartG then pExtState.loopStartG = nil end
 	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
-	if pExtState.loopLenG then pExtState.loopLenG = nil end
 	seqLoopNumDrop.val1 = 1; m.loopNum = 1
-	if pExtState.loopNum then pExtState.loopNum = nil end
-	pExtSaveStateF = true	-- set the ext state save flag
 	InsertNotes()
 end
 -- Glue sequencer repeater
@@ -2154,12 +2152,12 @@ function GlueSeqRepeater()
 	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
 
 	-- reset the program ext state	
-	if pExtState.loopStartG then pExtState.loopStartG = nil end
+	--if pExtState.loopStartG then pExtState.loopStartG = nil end
 	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
-	if pExtState.loopLenG then pExtState.loopLenG = nil end
+	--if pExtState.loopLenG then pExtState.loopLenG = nil end
 	seqLoopNumDrop.val1 = 1; m.loopNum = 1
-	if pExtState.loopNum then pExtState.loopNum = nil end
-	pExtSaveStateF = true	-- set the ext state save flag
+	--if pExtState.loopNum then pExtState.loopNum = nil end
+	--pExtSaveStateF = true	-- set the ext state save flag
 end
 -- Right-click handler
 seqLoopText.onRClick = function()
@@ -2223,10 +2221,6 @@ seqLoopStartDrop.onLClick = function()
 	if debug or m.debug then ConMsg("m.loopLenG   = " .. tostring(m.loopLenG)) end
 	if debug or m.debug then ConMsg("m.loopNum    = " .. tostring(m.loopNum)) end	
 
-	-- set project ext state	
-	--pExtState.oct = m.oct
-	--pExtState.root = m.root
-	--pExtSaveStateF = true
 end
 -- Sequencer repeat length
 seqLoopLenDrop.onLClick = function()
@@ -2267,11 +2261,6 @@ seqLoopLenDrop.onLClick = function()
 	if debug or m.debug then ConMsg("m.loopStartG = " .. tostring(m.t_loopStart[m.loopStartG])) end
 	if debug or m.debug then ConMsg("m.loopLenG   = " .. tostring(m.loopLenG)) end
 	if debug or m.debug then ConMsg("m.loopNum    = " .. tostring(m.loopNum)) end	
-
-	-- set project ext state	
-	--pExtState.oct = m.oct
-	--pExtState.root = m.root
-	--pExtSaveStateF = true
 end
 -- Sequencer repeat amount
 seqLoopNumDrop.onLClick = function()
@@ -2304,11 +2293,6 @@ seqLoopNumDrop.onLClick = function()
 	if debug or m.debug then ConMsg("m.loopStartG = " .. tostring(m.t_loopStart[m.loopStartG])) end
 	if debug or m.debug then ConMsg("m.loopLenG   = " .. tostring(m.loopLenG)) end
 	if debug or m.debug then ConMsg("m.loopNum    = " .. tostring(m.loopNum)) end	
-
-	-- set project ext state	
-	--pExtState.oct = m.oct
-	--pExtState.root = m.root
-	--pExtSaveStateF = true
 end
 
 --------------------------------------------------------------------------------
@@ -2518,8 +2502,6 @@ function InitMidiExMachina()
 			end -- pExtStateStr
 		end -- pExtLoadStateF
 	
-
-	
 	-- set GUI defaults or restore from project state
 	SetDefaultWindowOpts();	SetDefaultLayer() 
 	SetDefaultScaleOpts()
@@ -2559,7 +2541,6 @@ function MainLoop()
 	Shift = gfx.mouse_cap & 8  == 8
 	Alt   = gfx.mouse_cap & 16 == 16
 	
-
 	-- if resized, set scale flag and reset gfx
 	if m.zoomF == true then
 		if debug or m.debug then ConMsg("m.zoomF == true") end
