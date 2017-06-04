@@ -1491,42 +1491,6 @@ end
 --------------------------------------------------------------------------------
 -- Note Randomiser
 --------------------------------------------------------------------------------
--- Randomiser button
-randomBtn.onLClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("\nrandomBtn.onLClick()") end
-		if not m.activeTake then return end
-
-	-- backup and turn off shift
-	local t_shift = table.pack(m.seqShift, m.seqShiftMin, m.seqShiftMax)
-	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift
-	seqShiftVal.label = tostring(m.seqShift)
-	
-	-- turn off repeat
-	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false
-	
-	GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
-	if #m.noteProbTable == 0 then return end
-	GenOctaveTable(m.octProbTable, octProbSldr)
-	GetNotesFromTake()
-	RandomiseNotesPoly(m.noteProbTable)
-	
-	-- restore and turn shift back on
-	m.seqShift, m.seqShiftMin, m.seqShiftMax = table.unpack(t_shift)
-	seqShiftVal.label = tostring(m.seqShift)
-	 -- turn on repeat
-    m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false
-	InsertNotes()
-	
-	-- set project ext state	
-	pExtState.noteSliders = {}
-	for k, v in pairs(t_noteSliders) do
-		pExtState.noteSliders[k] = v.val1
-	end
-	pExtState.rndOctProb = octProbSldr.val1
-	pExtSaveStateF = true
-end 
-
 -- Set randomiser default options
 function SetDefaultRndOptions()
 	local debug = false
@@ -1693,73 +1657,6 @@ end
 --------------------------------------------------------------------------------
 -- Sequencer
 --------------------------------------------------------------------------------
--- Sequencer button
-sequenceBtn.onLClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("\nsequenceBtn.onLClick()") end
-	if not m.activeTake then return end
-	
-	-- backup and turn off shift
-	local t_shift = table.pack(m.seqShift, m.seqShiftMin, m.seqShiftMax)
-	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
-	seqShiftVal.label = tostring(m.seqShift)
-	-- turn off repeat
-	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false
-	InsertNotes()
-
-	if m.seqF then
-		SetSeqGridSizes(t_seqSliders)
-		GenProbTable(m.preSeqProbTable, t_seqSliders, m.seqProbTable)
-		GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
-		GenLegatoTable(m.legProbTable, seqLegProbSldr)
-		GetNotesFromTake()
-		GenSequence(m.seqProbTable, m.accProbTable, seqAccRSldr, m.legProbTable)
-    
-	else -- not m.seqF
-		GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
-		GenLegatoTable(m.legProbTable, seqLegProbSldr)
-		GetNotesFromTake() 
-		GenNoteAttributes(m.seqAccentF, m.accProbTable, seqAccRSldr, m.seqLegatoF, m.legProbTable)
-		
-		-- restore and turn shift back on
-		m.seqShift, m.seqShiftMin, m.seqShiftMax = table.unpack(t_shift)
-		seqShiftVal.label = tostring(m.seqShift)
-		InsertNotes()
-	end  -- m.seqF
-	
-	-- turn on repeat
-	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false	
-	
-	if m.seqRndNotesF then
-		randomBtn.onLClick() -- call RandomiseNotes
-	end
-
-	-- set project ext state
-	if seqGridRad.val1 == 1 then -- 1/16 grid
-		pExtState.seqGrid16 = {}
-		for k, v in pairs (t_seqSliders) do
-			pExtState.seqGrid16[k] = v.val1
-		end
-	end
-	if seqGridRad.val1 == 2 then -- 1/8 grid
-		pExtState.seqGrid8 = {}
-		for k, v in pairs (t_seqSliders) do
-			pExtState.seqGrid8[k] = v.val1
-		end
-	end
-	if seqGridRad.val1 == 3 then -- 1/4 grid
-		pExtState.seqGrid4 = {}
-		for k, v in pairs (t_seqSliders) do
-			pExtState.seqGrid4[k] = v.val1
-		end
-	end	
-	pExtState.seqAccRSldrLo = seqAccRSldr.val1
-	pExtState.seqAccRSldrHi = seqAccRSldr.val2
-	pExtState.seqAccProb = seqAccProbSldr.val1
-	pExtState.seqLegProb = seqLegProbSldr.val1
-	pExtSaveStateF = true
-end
-
 -- Set sequencer options defaults
 function SetDefaultSeqOptions()
 	local debug = false
@@ -2150,8 +2047,6 @@ function GlueSeqRepeater()
 	
 	-- reset the drop down lists and pExtState
 	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
-
-	-- reset the program ext state	
 	--if pExtState.loopStartG then pExtState.loopStartG = nil end
 	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
 	--if pExtState.loopLenG then pExtState.loopLenG = nil end
@@ -2298,41 +2193,6 @@ end
 --------------------------------------------------------------------------------
 -- Euclidiser
 --------------------------------------------------------------------------------
--- Euclidiser button
-euclidBtn.onLClick = function()
-	local debug = false
-	if debug or m.debug then ConMsg("\neuclidBtn.onLClick()") end
-	
-	if m.activeTake then
-		if m.eucF then
-			if debug or m.debug then ConMsg("m.eucF = " .. tostring(m.eucF)) end
-			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
-			GetNotesFromTake()
-			GenBjorklund(euclidPulsesSldr, euclidStepsSldr, euclidRotationSldr, m.accProbTable, seqAccRSldr)
-			if m.eucRndNotesF then 
-				randomBtn.onLClick() -- call RandomiseNotes
-			end
-			
-		else -- not m.eucF
-			if debug or m.debug then ConMsg("m.eucF = " .. tostring(m.eucF)) end
-			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
-			GetNotesFromTake()
-			GenNoteAttributes(m.eucAccentF, m.accProbTable, seqAccRSldr, false, m.legProbTable)
-			if m.eucRndNotesF then 
-				if debug or m.debug then ConMsg("m.eucRndNotesF = " .. tostring(m.eucRndNotesF)) end
-				randomBtn.onLClick() -- call RandomiseNotes
-			end    
-		end -- m.eucF
-		
-		-- set project ext state		
-		pExtState.eucSliders = {}
-		for k, v in pairs(t_euclidSliders) do
-			pExtState.eucSliders[k] = v.val1
-		end
-		pExtSaveStateF = true
-	end -- m.activeTake
-end
-
 -- Set euclid default options
 function SetDefaultEucOptions()
 	local debug = false
@@ -2436,6 +2296,142 @@ euclidRotationSldr.onMove = function()
 	end
 end
 
+-- Main action buttons
+-- Randomiser
+randomBtn.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\nrandomBtn.onLClick()") end
+		if not m.activeTake then return end
+
+	-- backup and turn off shift
+	local t_shift = table.pack(m.seqShift, m.seqShiftMin, m.seqShiftMax)
+	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift
+	seqShiftVal.label = tostring(m.seqShift)
+	
+	-- turn off repeat
+	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false
+	
+	GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
+	if #m.noteProbTable == 0 then return end
+	GenOctaveTable(m.octProbTable, octProbSldr)
+	GetNotesFromTake()
+	RandomiseNotesPoly(m.noteProbTable)
+	
+	-- restore and turn shift back on
+	m.seqShift, m.seqShiftMin, m.seqShiftMax = table.unpack(t_shift)
+	seqShiftVal.label = tostring(m.seqShift)
+	 -- turn on repeat
+    m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false
+	InsertNotes()
+	
+	-- set project ext state	
+	pExtState.noteSliders = {}
+	for k, v in pairs(t_noteSliders) do
+		pExtState.noteSliders[k] = v.val1
+	end
+	pExtState.rndOctProb = octProbSldr.val1
+	pExtSaveStateF = true
+end 
+-- Sequencer
+sequenceBtn.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\nsequenceBtn.onLClick()") end
+	if not m.activeTake then return end
+	
+	-- backup and turn off shift
+	local t_shift = table.pack(m.seqShift, m.seqShiftMin, m.seqShiftMax)
+	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
+	seqShiftVal.label = tostring(m.seqShift)
+	-- turn off repeat
+	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false
+	InsertNotes()
+
+	if m.seqF then
+		SetSeqGridSizes(t_seqSliders)
+		GenProbTable(m.preSeqProbTable, t_seqSliders, m.seqProbTable)
+		GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
+		GenLegatoTable(m.legProbTable, seqLegProbSldr)
+		GetNotesFromTake()
+		GenSequence(m.seqProbTable, m.accProbTable, seqAccRSldr, m.legProbTable)
+    
+	else -- not m.seqF
+		GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
+		GenLegatoTable(m.legProbTable, seqLegProbSldr)
+		GetNotesFromTake() 
+		GenNoteAttributes(m.seqAccentF, m.accProbTable, seqAccRSldr, m.seqLegatoF, m.legProbTable)
+		
+		-- restore and turn shift back on
+		m.seqShift, m.seqShiftMin, m.seqShiftMax = table.unpack(t_shift)
+		seqShiftVal.label = tostring(m.seqShift)
+		InsertNotes()
+	end  -- m.seqF
+	
+	-- turn on repeat
+	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false	
+	
+	if m.seqRndNotesF then
+		randomBtn.onLClick() -- call RandomiseNotes
+	end
+
+	-- set project ext state
+	if seqGridRad.val1 == 1 then -- 1/16 grid
+		pExtState.seqGrid16 = {}
+		for k, v in pairs (t_seqSliders) do
+			pExtState.seqGrid16[k] = v.val1
+		end
+	end
+	if seqGridRad.val1 == 2 then -- 1/8 grid
+		pExtState.seqGrid8 = {}
+		for k, v in pairs (t_seqSliders) do
+			pExtState.seqGrid8[k] = v.val1
+		end
+	end
+	if seqGridRad.val1 == 3 then -- 1/4 grid
+		pExtState.seqGrid4 = {}
+		for k, v in pairs (t_seqSliders) do
+			pExtState.seqGrid4[k] = v.val1
+		end
+	end	
+	pExtState.seqAccRSldrLo = seqAccRSldr.val1
+	pExtState.seqAccRSldrHi = seqAccRSldr.val2
+	pExtState.seqAccProb = seqAccProbSldr.val1
+	pExtState.seqLegProb = seqLegProbSldr.val1
+	pExtSaveStateF = true
+end
+-- Euclidiser
+euclidBtn.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\neuclidBtn.onLClick()") end
+	
+	if m.activeTake then
+		if m.eucF then
+			if debug or m.debug then ConMsg("m.eucF = " .. tostring(m.eucF)) end
+			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
+			GetNotesFromTake()
+			GenBjorklund(euclidPulsesSldr, euclidStepsSldr, euclidRotationSldr, m.accProbTable, seqAccRSldr)
+			if m.eucRndNotesF then 
+				randomBtn.onLClick() -- call RandomiseNotes
+			end
+			
+		else -- not m.eucF
+			if debug or m.debug then ConMsg("m.eucF = " .. tostring(m.eucF)) end
+			GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
+			GetNotesFromTake()
+			GenNoteAttributes(m.eucAccentF, m.accProbTable, seqAccRSldr, false, m.legProbTable)
+			if m.eucRndNotesF then 
+				if debug or m.debug then ConMsg("m.eucRndNotesF = " .. tostring(m.eucRndNotesF)) end
+				randomBtn.onLClick() -- call RandomiseNotes
+			end    
+		end -- m.eucF
+		
+		-- set project ext state		
+		pExtState.eucSliders = {}
+		for k, v in pairs(t_euclidSliders) do
+			pExtState.eucSliders[k] = v.val1
+		end
+		pExtSaveStateF = true
+	end -- m.activeTake
+end
 
 --------------------------------------------------------------------------------
 -- Draw GUI
