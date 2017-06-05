@@ -89,7 +89,7 @@ m.oct = 4; m.key = 1; m.root = 0 -- (options, except m.root)
 
 -- midi editor, take, grid
 m.activeEditor, m.activeTake, m.mediaItem = nil, nil, nil
-m.currTakeID, m.lastTakeID = "", ""
+m.currTake, m.lastTake = "", ""
 m.ppqn = 960; -- default ppqn, no idea how to check if this has been changed.. 
 m.reaGrid = 0
 
@@ -525,7 +525,7 @@ function GetNotesFromTake()
 				t[i][9] = rem == 0 and true or false
 			end -- for i				
 		end -- num_notes
-		if debug and m.debug then PrintNotes(t) end
+		if debug or m.debug then PrintNotes(t) end
 		return t
 	else -- no active take
 		if debug or m.debug then ConMsg("No Active Take") end
@@ -1694,6 +1694,8 @@ seqOptionsCb.onLClick = function()
 	
 	if pExtState.seqOptionsCb then
 		if pExtState.seqOptionsCb[6] ~= m.seqRepeatF then InsertNotes() end
+	else
+		if m.seqRepeatF then InsertNotes() end
 	end
 	
 	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
@@ -1779,59 +1781,6 @@ seqSldrText.onRClick = function()
 		end -- seqGridRad
 		pExtSaveStateF = true	-- set the ext state save flag
 	end -- result
-end
--- Sequencer grid toggle logic
-seqGridRad.onLClick = function() -- change grid size
-	local debug = false
-	if debug or m.debug then ConMsg("\nseqGridRad.onLClick()") end
-	
-	if m.activeTake then
-	
-		if seqGridRad.val1 == 1 then -- 1/16 grid
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40192) -- set grid
-			if pExtState.seqGrid16 then
-				for k, v in pairs(t_seqSliders) do
-					v.val1 = pExtState.seqGrid16[k]
-				end -- in pairs(t_seqSliders)
-			else -- not pExtState.seqGrid16
-				for k, v in pairs(t_seqSliders) do
-					v.val1 = m.seqGrid16[k]
-				end -- in pairs(t_seqSliders)
-			end -- if pExtState.seqGrid16
-
-		elseif seqGridRad.val1 == 2 then -- 1/8 grid
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40197) -- set grid
-			if pExtState.seqGrid8 then
-				for k, v in pairs(t_seqSliders) do
-					v.val1 = pExtState.seqGrid8[k]
-				end -- in pairs(t_seqSliders)
-			else -- not pExtState.seqGrid8
-				for k, v in pairs(t_seqSliders) do
-					v.val1 = m.seqGrid8[k]
-				end -- in pairs(t_seqSliders)
-			end -- if pExtState.seqGrid8
-
-		elseif seqGridRad.val1 == 3 then -- 1/4 grid
-			reaper.MIDIEditor_OnCommand(m.activeEditor, 40201) -- set grid
-			if pExtState.seqGrid4 then -- 1/4 grid
-				for k, v in pairs(t_seqSliders) do
-					v.val1 = pExtState.seqGrid4[k]
-				end -- in pairs(t_seqSliders)
-			else -- not pExtState.seqGrid4
-				for k, v in pairs(t_seqSliders) do
-					v.val1 = m.seqGrid4[k]
-				end -- in pairs(t_seqSliders)
-			end -- pExtState.seqGrid4
-		end -- seGridRad
-
-		-- reset the shift state
-		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
-		seqShiftVal.label = tostring(m.seqShift)
-		GetNotesFromTake() -- force an undo point on grid change
-		--InsertNotes()
-		pExtSaveStateF = true
-		
-	end -- m.activeTake
 end
 
 -- Set sequencer accent & legato slider defaults
@@ -2029,6 +1978,8 @@ function ResetSeqRepeater()
 	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
 	seqLoopNumDrop.val1 = 1; m.loopNum = 1
 	InsertNotes()
+	pExtState.seqOptionsCb[6] = m.seqRepeatF
+	pExtSaveStateF = true
 end
 -- Glue sequencer repeater
 function GlueSeqRepeater()
@@ -2297,24 +2248,16 @@ euclidRotationSldr.onMove = function()
 	end
 end
 
--- Main action buttons
+-- Main action elements
 -- Randomiser
 randomBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\nrandomBtn.onLClick()") end
 	if not m.activeTake then return end
 
-	-- turn off and reset shift
-	m.seqShiftF = false
-	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
-	seqShiftVal.label = tostring(m.seqShift)
-	
-	-- turn off and reset repeat
-	m.seqRepeatF = false
-	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
-	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
-	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
-	seqLoopNumDrop.val1 = 1; m.loopNum = 1
+	-- turn off and reset shifter and repeater
+	ResetSeqShifter()
+	ResetSeqRepeater()
 	
 	-- generate the probability tables
 	GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
@@ -2406,22 +2349,64 @@ sequenceBtn.onLClick = function()
 	pExtState.seqLegProb = seqLegProbSldr.val1
 	pExtSaveStateF = true
 end
+-- Sequencer grid toggle logic
+seqGridRad.onLClick = function() -- change grid size
+	local debug = false
+	if debug or m.debug then ConMsg("\nseqGridRad.onLClick()") end
+	
+	if m.activeTake then
+	
+		if seqGridRad.val1 == 1 then -- 1/16 grid
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40192) -- set grid
+			if pExtState.seqGrid16 then
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = pExtState.seqGrid16[k]
+				end -- in pairs(t_seqSliders)
+			else -- not pExtState.seqGrid16
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = m.seqGrid16[k]
+				end -- in pairs(t_seqSliders)
+			end -- if pExtState.seqGrid16
+
+		elseif seqGridRad.val1 == 2 then -- 1/8 grid
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40197) -- set grid
+			if pExtState.seqGrid8 then
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = pExtState.seqGrid8[k]
+				end -- in pairs(t_seqSliders)
+			else -- not pExtState.seqGrid8
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = m.seqGrid8[k]
+				end -- in pairs(t_seqSliders)
+			end -- if pExtState.seqGrid8
+
+		elseif seqGridRad.val1 == 3 then -- 1/4 grid
+			reaper.MIDIEditor_OnCommand(m.activeEditor, 40201) -- set grid
+			if pExtState.seqGrid4 then -- 1/4 grid
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = pExtState.seqGrid4[k]
+				end -- in pairs(t_seqSliders)
+			else -- not pExtState.seqGrid4
+				for k, v in pairs(t_seqSliders) do
+					v.val1 = m.seqGrid4[k]
+				end -- in pairs(t_seqSliders)
+			end -- pExtState.seqGrid4
+		end -- seGridRad
+
+	-- turn off and reset shifter and repeater
+	ResetSeqShifter()
+	ResetSeqRepeater()
+		
+	end -- m.activeTake
+end
 -- Euclidiser
 euclidBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\neuclidBtn.onLClick()") end
 	
-	-- turn off and reset shift
-	m.seqShiftF = false
-	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
-	seqShiftVal.label = tostring(m.seqShift)
-	
-	-- turn off and reset repeat
-	m.seqRepeatF = false
-	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
-	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
-	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
-	seqLoopNumDrop.val1 = 1; m.loopNum = 1	
+	-- turn off and reset shifter and repeater
+	ResetSeqShifter()
+	ResetSeqRepeater()
 	
 	if m.activeTake then
 		if m.eucF then
@@ -2497,6 +2482,7 @@ function InitMidiExMachina()
 		if debug or m.debug then ConMsg("activeEditor = " .. tostring(m.activeEditor)) end
 		m.activeTake = reaper.MIDIEditor_GetTake(m.activeEditor)
 		if m.activeTake then
+			m.lastTake = m.activeTake
 			if debug or m.debug then ConMsg("activeTake = " .. tostring(m.activeTake)) end
 			__ = NewNoteBuf()
 			-- get the take's parent media item
@@ -2608,17 +2594,22 @@ function MainLoop()
 	if m.activeEditor then
 		m.activeTake = reaper.MIDIEditor_GetTake(m.activeEditor)
 		if m.activeTake then
-			m.currTakeID = string.sub(tostring(m.activeTake),11)
-			if m.currTakeID ~= m.lastTakeID then
+			if m.activeTake ~= m.lastTake then
 				if debug or m.debug then ConMsg("switched MIDI item...") end
-				m.lastTakeID = m.currTakeID
+				-- switch to last take
+				reaper.SetActiveTake(m.lastTake)
+				-- reset shift and repeat
+				ResetSeqShifter()
+				ResetSeqRepeater()			
+				InsertNotes()
+				-- switch to new take
+				reaper.SetActiveTake(m.activeTake)
+				m.lastTake = m.activeTake
 				-- purge undo/redo buffers and grab new note data
 				m.notebuf.i = 1
 				PurgeNoteBuf()
 				t = GetNoteBuf()
 				ClearTable(t)
-				SetDefaultSeqShift()
-				SetDefaultSeqRepeat()
 				GetNotesFromTake()
 			end
 			ShowMessage(msgText, 0) -- clear old messages
