@@ -2411,6 +2411,18 @@ euclidBtn.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\neuclidBtn.onLClick()") end
 	
+	-- turn off and reset shift
+	m.seqShiftF = false
+	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
+	seqShiftVal.label = tostring(m.seqShift)
+	
+	-- turn off and reset repeat
+	m.seqRepeatF = false
+	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
+	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
+	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
+	seqLoopNumDrop.val1 = 1; m.loopNum = 1	
+	
 	if m.activeTake then
 		if m.eucF then
 			if debug or m.debug then ConMsg("m.eucF = " .. tostring(m.eucF)) end
