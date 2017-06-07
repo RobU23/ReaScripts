@@ -1866,7 +1866,6 @@ function ResetSeqShifter()
 		ConMsg("Reset m.seqShift, m.seqShiftMin, m.seqShiftMax to 0")
 		ConMsg("Reset shifter label to m.seqShift")
 	end
-	InsertNotes()
 end
 -- Glue sequence shifter
 function GlueSeqShifter()
@@ -1891,6 +1890,7 @@ seqShiftText.onRClick = function()
 
 	if result == 1 then
 		ResetSeqShifter()
+		InsertNotes()
 	elseif result == 2 then
 		GlueSeqShifter()
 	end -- result
@@ -1972,12 +1972,11 @@ function ResetSeqRepeater()
 	-- reset the GUI and repeat flag
 	m.seqRepeatF = false 
 	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
-	seqOptionsCb.onLClick() -- will insert notes from the last buffer if necessary
 	-- reset the drop down lists
 	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
 	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
 	seqLoopNumDrop.val1 = 1; m.loopNum = 1
-	InsertNotes()
+	-- save state
 	pExtState.seqOptionsCb[6] = m.seqRepeatF
 	pExtSaveStateF = true
 end
@@ -1989,13 +1988,10 @@ function GlueSeqRepeater()
 	InsertNotes()
 	
 	-- reset the shifter (implicit when glueing the loop)
-	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
-	seqShiftVal.label = tostring(m.seqShift)	
+	ResetSeqShifter()
 	
 	-- reset the GUI and repeat flag
-	m.seqRepeatF = false 
-	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0	
-	seqOptionsCb.onLClick()
+	ResetSeqRepeater()
 	
 	-- reset the drop down lists and pExtState
 	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
@@ -2016,6 +2012,7 @@ seqLoopText.onRClick = function()
 
 	if result == 1 then 
 		ResetSeqRepeater()
+		InsertNotes()
 	elseif result == 2 then
 		GlueSeqRepeater()
 	end -- result
@@ -2258,7 +2255,7 @@ randomBtn.onLClick = function()
 	-- turn off and reset shifter and repeater
 	ResetSeqShifter()
 	ResetSeqRepeater()
-	
+	InsertNotes()
 	-- generate the probability tables
 	GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
 	if #m.noteProbTable == 0 then return end
@@ -2282,8 +2279,7 @@ sequenceBtn.onLClick = function()
 	
 	-- turn off and reset shift
 	local t_shift = table.pack(m.seqShift, m.seqShiftMin, m.seqShiftMax)
-	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
-	seqShiftVal.label = tostring(m.seqShift)
+	ResetSeqShifter()
 	
 	-- backup repeat
 		local t_repeat = table.pack(m.loopStartG, m.loopLenG, m.loopNum, m.seqRepeatF)	
@@ -2396,7 +2392,7 @@ seqGridRad.onLClick = function() -- change grid size
 	-- turn off and reset shifter and repeater
 	ResetSeqShifter()
 	ResetSeqRepeater()
-		
+	InsertNotes()
 	end -- m.activeTake
 end
 -- Euclidiser
@@ -2407,7 +2403,7 @@ euclidBtn.onLClick = function()
 	-- turn off and reset shifter and repeater
 	ResetSeqShifter()
 	ResetSeqRepeater()
-	
+	InsertNotes()
 	if m.activeTake then
 		if m.eucF then
 			if debug or m.debug then ConMsg("m.eucF = " .. tostring(m.eucF)) end
@@ -2482,7 +2478,7 @@ function InitMidiExMachina()
 		if debug or m.debug then ConMsg("activeEditor = " .. tostring(m.activeEditor)) end
 		m.activeTake = reaper.MIDIEditor_GetTake(m.activeEditor)
 		if m.activeTake then
-			m.lastTake = m.activeTake
+			m.lastTake = nil
 			if debug or m.debug then ConMsg("activeTake = " .. tostring(m.activeTake)) end
 			__ = NewNoteBuf()
 			-- get the take's parent media item
@@ -2569,8 +2565,9 @@ function MainLoop()
 		reaper.defer(MainLoop) 
 	else
 		-- reset the shifter and repeater here...
-		ResetSeqRepeater()
-		ResetSeqShifter()
+		--ResetSeqRepeater()
+		--ResetSeqShifter()
+		--InsertNotes()
 		-- Check and save window position
 		__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
 		if m.win_x ~= pExtState.win_x or m.win_y ~= pExtState.win_y then	
@@ -2596,21 +2593,15 @@ function MainLoop()
 		if m.activeTake then
 			if m.activeTake ~= m.lastTake then
 				if debug or m.debug then ConMsg("switched MIDI item...") end
-				-- switch to last take
-				reaper.SetActiveTake(m.lastTake)
 				-- reset shift and repeat
 				ResetSeqShifter()
-				ResetSeqRepeater()			
-				InsertNotes()
-				-- switch to new take
-				reaper.SetActiveTake(m.activeTake)
-				m.lastTake = m.activeTake
+				ResetSeqRepeater()
 				-- purge undo/redo buffers and grab new note data
 				m.notebuf.i = 1
 				PurgeNoteBuf()
 				t = GetNoteBuf()
 				ClearTable(t)
-				GetNotesFromTake()
+				m.lastTake = m.activeTake
 			end
 			ShowMessage(msgText, 0) -- clear old messages
 			-- check for changes in the active take if the "Permute" scale is selected
