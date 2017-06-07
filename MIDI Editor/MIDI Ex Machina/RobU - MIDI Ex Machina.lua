@@ -1861,18 +1861,13 @@ function ResetSeqShifter()
 	m.seqShiftF = false	
 	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
 	seqShiftVal.label = tostring(m.seqShift)
-	
-	if debug or m.debug then 
-		ConMsg("Reset m.seqShift, m.seqShiftMin, m.seqShiftMax to 0")
-		ConMsg("Reset shifter label to m.seqShift")
-	end
 end
 -- Glue sequence shifter
 function GlueSeqShifter()
 	local debug = false
 	if debug or m.debug then ConMsg("GlueSeqShifter()") end
 	m.shiftGlueF = true
-	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn off repeat
+	m.seqRepeatF = seqOptionsCb.val1[6] == 1 and true or false -- Turn off repeat if on...
 	InsertNotes()
 	m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift on new sequence
 	seqShiftVal.label = tostring(m.seqShift)
@@ -2508,6 +2503,8 @@ function InitMidiExMachina()
 	SetDefaultSeqGridSliders(); SetDefaultAccLegSliders()
 	SetDefaultEucOptions(); SetDefaultEucSliders()
 
+	-- some pExtState stuff required early...
+	pExtState.seqOptionsCb = {}
 	if debug or m.debug then ConMsg("End InitMidiExMachina()") end
 end
 --------------------------------------------------------------------------------
@@ -2564,10 +2561,11 @@ function MainLoop()
 	if char ~= -1 and char ~= 27 then 
 		reaper.defer(MainLoop) 
 	else
+		if debug or m.debug then ConMsg("quitting.....") end
 		-- reset the shifter and repeater here...
 		--ResetSeqRepeater()
 		--ResetSeqShifter()
-		--InsertNotes()
+		InsertNotes()
 		-- Check and save window position
 		__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
 		if m.win_x ~= pExtState.win_x or m.win_y ~= pExtState.win_y then	
@@ -2592,7 +2590,7 @@ function MainLoop()
 		m.activeTake = reaper.MIDIEditor_GetTake(m.activeEditor)
 		if m.activeTake then
 			if m.activeTake ~= m.lastTake then
-				if debug or m.debug then ConMsg("switched MIDI item...") end
+				if debug or m.debug then ConMsg("\nswitched MIDI item...") end
 				-- reset shift and repeat
 				ResetSeqShifter()
 				ResetSeqRepeater()
