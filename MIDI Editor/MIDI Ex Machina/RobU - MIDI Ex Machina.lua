@@ -1195,8 +1195,8 @@ local layerBtn04 = e.Button:new({0}, 305, m.win_h - 25, 100, 20, e.col_grey5, "O
 local undoBtn = e.Button:new({0}, m.win_w-85, m.win_h -25, 40, 20, e.col_grey5, "Undo", m.defFont, m.defFontSz, e.col_grey7)
 local redoBtn = e.Button:new({0}, m.win_w-45, m.win_h -25, 40, 20, e.col_grey5, "Redo", m.defFont, m.defFontSz, e.col_grey7)
 -- Persistent window element table
-t_winElements = {winFrame, zoomDrop, winText, layerBtn01, layerBtn02, layerBtn03, layerBtn04, undoBtn, redoBtn}
-
+local t_winElements = {winFrame, zoomDrop, winText, undoBtn, redoBtn}
+local t_winLayers = {layerBtn01, layerBtn02, layerBtn03, layerBtn04}
 --------------------------------------------------------------------------------
 -- Common Elements
 --------------------------------------------------------------------------------
@@ -1357,18 +1357,20 @@ end
 layerBtn01.onLClick = function() -- randomiser
 	local debug = false
 	if debug or m.debug then ConMsg("\nlayerBtn01.onLClick() (note randomiser)") end
-	
-	e.gActiveLayer = 1 
-	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_green)
-	winText.r, winText.g, winText.b, winText.a = table.unpack(e.col_green)
-	layerBtn01.font_rgba = e.col_grey8 -- highlight layer 1
-	layerBtn01.r, layerBtn01.g, layerBtn01.b, layerBtn01.a = table.unpack(e.col_green)
-	layerBtn02.font_rgba = e.col_grey7
-	layerBtn02.r, layerBtn02.g, layerBtn02.b, layerBtn02.a = table.unpack(e.col_grey5)
-	layerBtn03.font_rgba = e.col_grey7
-	layerBtn03.r, layerBtn03.g, layerBtn03.b, layerBtn03.a = table.unpack(e.col_grey5)
-	layerBtn04.font_rgba = e.col_grey7
-	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey5)
+	-- set active layer
+	e.gActiveLayer = 1
+	-- set zoom and window text elements to highlight colour
+	zoomDrop:getSetColour(e.col_green)
+	winText:getSetColour(e.col_green)
+	-- reset all layer buttons to default colour
+	for k, v in pairs(t_winLayers) do
+		v:getSetColour(e.col_grey5)
+		v:getSetLabelColour(e.gol_grey7)
+	end
+	-- set current layer to highlight colour
+	layerBtn01:getSetColour(e.col_green)	
+	layerBtn01:getSetLabelColour(e.col_grey8)
+	-- set zoom state flag
 	e.gScaleState = true
 	-- set project ext state
 	pExtState.activeLayer = e.gActiveLayer
@@ -1378,20 +1380,22 @@ end
 layerBtn02.onLClick = function() -- sequencer
 	local debug = false
 	if debug or m.debug then ConMsg("\nlayerBtn02.onLClick() (sequencer)") end
-	
+	-- set active layer
 	e.gActiveLayer = 2
-	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_yellow)
-	winText.r, winText.g, winText.b, winText.a = table.unpack(e.col_yellow)
-	layerBtn01.font_rgba = e.col_grey7
-	layerBtn01.r, layerBtn01.g, layerBtn01.b, layerBtn01.a = table.unpack(e.col_grey5)
-	layerBtn02.font_rgba = e.col_grey8 -- highlight layer 2
-	layerBtn02.r, layerBtn02.g, layerBtn02.b, layerBtn02.a = table.unpack(e.col_yellow)
-	layerBtn03.font_rgba = e.col_grey7
-	layerBtn03.r, layerBtn03.g, layerBtn03.b, layerBtn03.a = table.unpack(e.col_grey5)
-	layerBtn04.font_rgba = e.col_grey7
-	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a  = table.unpack(e.col_grey5)
+	-- set zoom and window text elements to highlight colour
+	zoomDrop:getSetColour(e.col_yellow)
+	winText:getSetColour(e.col_yellow)
+	-- reset all layer buttons to default colour
+	for k, v in pairs(t_winLayers) do
+		v:getSetColour(e.col_grey5)
+		v:getSetLabelColour(e.gol_grey7)
+	end
+	-- set current layer to highlight colour
+	layerBtn02:getSetColour(e.col_yellow)	
+	layerBtn02:getSetLabelColour(e.col_grey8)
+	-- set zoom state flag
 	e.gScaleState = true
-		-- set project ext state
+	-- set project ext state
 	pExtState.activeLayer = e.gActiveLayer
 	pExtSaveStateF = true		
 end
@@ -1399,20 +1403,22 @@ end
 layerBtn03.onLClick = function() -- euclidean
 	local debug = false
 	if debug or m.debug then ConMsg("\nlayerBtn03.onLClick() (euclid)") end
-	
+	-- set active layer
 	e.gActiveLayer = 3
-	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_orange)
-	winText.r, winText.g, winText.b, winText.a = table.unpack(e.col_orange)
-	layerBtn01.font_rgba = e.col_grey7
-	layerBtn01.r, layerBtn01.g, layerBtn01.b, layerBtn01.a = table.unpack(e.col_grey5)
-	layerBtn02.font_rgba = e.col_grey7
-	layerBtn02.r, layerBtn02.g, layerBtn02.b, layerBtn02.a = table.unpack(e.col_grey5)
-	layerBtn03.font_rgba = e.col_grey8 -- highlight layer 3
-	layerBtn03.r, layerBtn03.g, layerBtn03.b, layerBtn03.a = table.unpack(e.col_orange)
-	layerBtn04.font_rgba = e.col_grey7
-	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey5)
+	-- set zoom and window text elements to highlight colour
+	zoomDrop:getSetColour(e.col_orange)
+	winText:getSetColour(e.col_orange)
+	-- reset all layer buttons to default colour
+	for k, v in pairs(t_winLayers) do
+		v:getSetColour(e.col_grey5)
+		v:getSetLabelColour(e.gol_grey7)
+	end
+	-- set current layer to highlight colour
+	layerBtn03:getSetColour(e.col_orange)	
+	layerBtn03:getSetLabelColour(e.col_grey8)
+	-- set zoom state flag	
 	e.gScaleState = true
-		-- set project ext state
+	-- set project ext state
 	pExtState.activeLayer = e.gActiveLayer
 	pExtSaveStateF = true		
 end
@@ -1420,20 +1426,22 @@ end
 layerBtn04.onLClick = function() -- options
 	local debug = false
 	if debug or m.debug then ConMsg("\nlayerBtn04.onLClick() (options)") end
-	
+	-- set active layer
 	e.gActiveLayer = 4
-	zoomDrop.r, zoomDrop.g, zoomDrop.b, zoomDrop.a = table.unpack(e.col_grey5)
-	winText.r, winText.g, winText.b, winText.a = table.unpack(e.col_grey5)
-	layerBtn01.font_rgba = e.col_grey7
-	layerBtn01.r, layerBtn01.g, layerBtn01.b, layerBtn01.a = table.unpack(e.col_grey5)
-	layerBtn02.font_rgba = e.col_grey7
-	layerBtn02.r, layerBtn02.g, layerBtn02.b, layerBtn02.a = table.unpack(e.col_grey5)
-	layerBtn03.font_rgba = e.col_grey7
-	layerBtn03.r, layerBtn03.g, layerBtn03.b, layerBtn03.a = table.unpack(e.col_grey5)
-	layerBtn04.font_rgba = e.col_grey8 -- highlight layer 4
-	layerBtn04.r, layerBtn04.g, layerBtn04.b, layerBtn04.a = table.unpack(e.col_grey6)
+	-- set zoom and window text elements to highlight colour
+	zoomDrop:getSetColour(e.col_grey5)
+	winText:getSetColour(e.col_grey5)
+	-- reset all layer buttons to default colour
+	for k, v in pairs(t_winLayers) do
+		v:getSetColour(e.col_grey5)
+		v:getSetLabelColour(e.gol_grey7)
+	end
+	-- set current layer to highlight colour
+	layerBtn04:getSetColour(e.col_grey6)	
+	layerBtn04:getSetLabelColour(e.col_grey8)
+	-- set zoom state flag
 	e.gScaleState = true
-		-- set project ext state
+	-- set project ext state
 	pExtState.activeLayer = e.gActiveLayer
 	pExtSaveStateF = true		
 end
@@ -2434,6 +2442,7 @@ end
 --------------------------------------------------------------------------------
 function DrawGUI()
 	for key, winElms in pairs(t_winElements) do winElms:draw() end
+	for key, winLays in pairs(t_winLayers) do winLays:draw() end
 	--for key, frame in pairs(t_Frames) do frame:draw() end 
 	for key, check in pairs(t_Checkboxes) do check:draw() end
 	for key, radio in pairs(t_RadButtons) do radio:draw() end	
@@ -2600,6 +2609,7 @@ function MainLoop()
 				t = GetNoteBuf()
 				ClearTable(t)
 				m.lastTake = m.activeTake
+				GetNotesFromTake()
 			end
 			ShowMessage(msgText, 0) -- clear old messages
 			-- check for changes in the active take if the "Permute" scale is selected
