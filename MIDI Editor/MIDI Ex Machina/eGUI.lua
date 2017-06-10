@@ -144,11 +144,11 @@ function e.Element:new(tab, x,y,w,h, rgba, label, font, font_sz, font_rgba, val1
 		end
 	end
 	elm.tab = bf
-	elm.def_xywh = {x,y,w,h, font_sz} -- default coordinates, used for zoom and some Element initialisation
+	elm.def_xywh = {x,y,w,h, font_sz} -- default coordinates for zoom and some Element initialisation
 	elm.x, elm.y, elm.w, elm.h = x, y, w, h -- position and size
 	elm.r, elm.g, elm.b, elm.a = table.unpack(rgba) -- Element colour
 	elm.label, elm.font, elm.font_sz, elm.font_rgba  = label, font, font_sz, font_rgba -- all things fonty
-	elm.val1 = val1;	elm.val2 = val2 -- general purpose variables or tables
+	elm.val1 = val1; elm.val2 = val2 -- general purpose variables or tables
 	elm.min, elm.max, elm.step = min, max, step -- for incrementing or decrementing values
 	setmetatable(elm, self)
 	self.__index = self
@@ -157,7 +157,7 @@ end
 --------------------------------------------------------------------------------
 -- Element Class Methods
 --------------------------------------------------------------------------------
-function e.Element:update_zoom() -- generic e.Element scaling
+function e.Element:update_zoom() -- element scaling
 	if not e.gScaleState then return end
 	self.x = math.ceil(self.def_xywh[1] * e.gScale)	-- update x position
 	self.w = math.ceil(self.def_xywh[3] * e.gScale) -- update width
@@ -187,12 +187,12 @@ end
 --------------------------------------------------------------------------------
 function e.Element:mouseLClick()
 	return gfx.mouse_cap & 1 == 0 and gLastMouseCap & 1 == 1 and
-	self:pointIN(gfx.mouse_x, gfx.mouse_y) and self:pointIN(gMouseOX, gMouseOY)         
+		self:pointIN(gfx.mouse_x, gfx.mouse_y) and self:pointIN(gMouseOX, gMouseOY)         
 end
 --------------------------------------------------------------------------------
 function e.Element:mouseRClick()
 	return gfx.mouse_cap & 2 == 0 and gLastMouseCap & 2 == 2 and
-	self:pointIN(gfx.mouse_x, gfx.mouse_y) and self:pointIN(gMouseOX, gMouseOY)         
+		self:pointIN(gfx.mouse_x, gfx.mouse_y) and self:pointIN(gMouseOX, gMouseOY)         
 end
 --------------------------------------------------------------------------------
 function e.Element:mouseRDown()
@@ -203,9 +203,46 @@ function e.Element:mouseMDown()
 	return gfx.mouse_cap & 64 == 64 and self:pointIN(gMouseOX, gMouseOY)
 end
 --------------------------------------------------------------------------------
-function e.Element:draw_frame() -- generic e.Element frame drawing
+function e.Element:draw_frame()
 	gfx.rect(self.x, self.y, self.w, self.h, false) -- frame1
 	gfx.roundrect(self.x, self.y, self.w - 1, self.h - 1, 3, true) -- frame2         
+end
+--------------------------------------------------------------------------------
+function e.Element:getSetColour(col)
+	if type(col) == "table" then
+		if #col == 4 then
+			local safe = true
+			for k, v in pairs(col) do
+				if v < 0 or v > 1 then safe = false end
+			end
+			if safe == true then 
+				self.r, self.g, self.b, self.a = table.unpack(col)
+			end
+		end
+	end
+	return table.pack(self.r, self.g, self.b, self.a)
+end
+--------------------------------------------------------------------------------
+function e.Element:getSetLabel(str)
+	if type(str) == "string" then
+		self.label = str
+	end
+	return self.label
+end
+--------------------------------------------------------------------------------
+function e.Element:getSetLabelColour(col)
+	if type(col) == "table" then
+		if #col == 4 then
+			local safe = true
+			for k, v in pairs(col) do
+				if v < 0 or v > 1 then safe = false end
+			end
+			if safe == true then
+				self.font_rgba = col
+			end
+		end
+	end
+	return self.font_rgba
 end
 --------------------------------------------------------------------------------
 -- Metatable funtion for child classes(args = Child, Parent Class)
@@ -246,11 +283,11 @@ end
 ---------------------------------------------------------------------------------
 function e.Button:draw()
 	if (self.tab & (1 << e.gActiveLayer)) == 0 and self.tab ~= 0 then return end
-	self:update_zoom()  
+	self:update_zoom()
 	local a = self.a -- local alpha value for highlight
 	-- Get mouse state	
-	if self:mouseIN() 		then a = a + 0.1 end  -- if in e.Element, increase opacity
-	if self:mouseLDown()	then a = a + 0.2 end  -- if e.Element clicked, increase opacity more
+	if self:mouseIN() then a = a + 0.1 end  -- if in e.Element, increase opacity
+	if self:mouseLDown() then a = a + 0.2 end  -- if e.Element clicked, increase opacity more
 	-- in elm L_up (released and was previously pressed), run onLClick (user defined)
 	if self:mouseLClick() and self.onLClick then self.onLClick() end
 	-- in elm R_up (released and was previously pressed), run onRClick (user defined)
@@ -296,7 +333,7 @@ function e.Checkbox:set_val1()
 	local tOptions = self.val2 -- the table of options
 	local optIdx = math.floor(((gfx.mouse_y - y) / h) * #tOptions) + 1
 	if optIdx < 1 then optIdx = 1 elseif optIdx > #tOptions then optIdx = #tOptions end
-	if tOptState[optIdx] == 0 then tOptState[optIdx] = 1
+	    if tOptState[optIdx] == 0 then tOptState[optIdx] = 1
 	elseif tOptState[optIdx] == 1 then tOptState[optIdx] = 0 end
 end
 --------------------------------------------------------------------------------
