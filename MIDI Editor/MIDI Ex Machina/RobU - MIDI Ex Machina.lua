@@ -73,9 +73,9 @@ local p = require 'persistence' -- currently unused, i.e. no preset save, load, 
 --------------------------------------------------------------------------------
 m = {} -- all ex machina data
 -- user changeable defaults are marked with "(option)"
-m.debug = true
+m.debug = false
 -- window
-m.win_title = "RobU : MIDI Ex Machina - v1.3.2"; m.win_dockstate = 0
+m.win_title = "RobU : MIDI Ex Machina - v1.37"; m.win_dockstate = 0
 m.win_x = 10; m.win_y = 10; m.win_w = 900; m.win_h = 280 -- window dimensions
 m.win_bg = {0, 0, 0} -- background colour
 m.def_zoom = 4 -- 100% (option)
@@ -162,8 +162,6 @@ m.preSeqProbTable = {};   m.seqProbTable  = {}
 m.accProbTable = {};      m.octProbTable  = {}
 m.legProbTable = {}
 
-pExtSaveStateF = false -- when true, update the pExtState for saving
-pExtLoadStateF = true -- when true, load the pExtState
 pExtState = {} -- Reaper project ext state table
 pExtStateStr = "" -- pickled string. a nom a nom a nom...
 --------------------------------------------------------------------------------
@@ -1341,16 +1339,17 @@ zoomDrop.onLClick = function() -- window scaling
 	elseif zoomDrop.val1 ==  9 then e.gScale = 1.8
 	elseif zoomDrop.val1 == 10 then e.gScale = 2.0
 	end
+	pExtState.zoomDrop = zoomDrop.val1
 	
 	if debug or m.debug then ConMsg("zoom = " .. tostring(e.gScale)) end
-	-- Save state, close and reopen GFX window
-	if not pExtState.win_x then
+	
+	-- set soom 
+	if pExtState.win_x ~= m.win_x then
 		__, m.win_x, m.win_y, __, __ = gfx.dock(-1,0,0,0,0)
-	else
-		-- set project ext state
-		pExtState.zoomDrop = zoomDrop.val1
-		pExtSaveStateF = true		
+	pExtState.win_x = m.win_x
+	pExtState.win_y = m.win_y
 	end
+		
 	m.zoomF = true
 end
 -- Layer 1 button
@@ -1374,7 +1373,7 @@ layerBtn01.onLClick = function() -- randomiser
 	e.gScaleState = true
 	-- set project ext state
 	pExtState.activeLayer = e.gActiveLayer
-	pExtSaveStateF = true			
+		
 end
 -- Layer 2 button
 layerBtn02.onLClick = function() -- sequencer
@@ -1396,8 +1395,7 @@ layerBtn02.onLClick = function() -- sequencer
 	-- set zoom state flag
 	e.gScaleState = true
 	-- set project ext state
-	pExtState.activeLayer = e.gActiveLayer
-	pExtSaveStateF = true		
+	pExtState.activeLayer = e.gActiveLayer	
 end
 -- Layer 3 button
 layerBtn03.onLClick = function() -- euclidean
@@ -1419,8 +1417,7 @@ layerBtn03.onLClick = function() -- euclidean
 	-- set zoom state flag	
 	e.gScaleState = true
 	-- set project ext state
-	pExtState.activeLayer = e.gActiveLayer
-	pExtSaveStateF = true		
+	pExtState.activeLayer = e.gActiveLayer	
 end
 -- Layer 4 button
 layerBtn04.onLClick = function() -- options
@@ -1442,8 +1439,7 @@ layerBtn04.onLClick = function() -- options
 	-- set zoom state flag
 	e.gScaleState = true
 	-- set project ext state
-	pExtState.activeLayer = e.gActiveLayer
-	pExtSaveStateF = true		
+	pExtState.activeLayer = e.gActiveLayer	
 end
 -- Undo button
 undoBtn.onLClick = function() -- undo
@@ -1476,10 +1472,12 @@ function SetDefaultWindowOpts()
 	if pExtState.zoomDrop then
 		zoomDrop.val1 = pExtState.zoomDrop
 	end
-	if pExtState.win_x or pExtState.win_y then
+	
+	if pExtState.win_x then -- set the windown position
 		m.win_x = pExtState.win_x
 		m.win_y = pExtState.win_y
 	end
+	
 	zoomDrop.onLClick()
 end
 -- Set default layer
@@ -1524,8 +1522,9 @@ noteOptionsCb.onLClick = function()
 	m.rndAllNotesF =  noteOptionsCb.val1[1] == 1 and true or false -- All / Sel Notes
 	m.rndFirstNoteF = noteOptionsCb.val1[2] == 1 and true or false -- 1st Note Root
 	m.rndOctX2F =     noteOptionsCb.val1[3] == 1 and true or false -- Octave X2
+	
 	pExtState.noteOptionsCb = {m.rndAllNotesF, m.rndFirstNoteF, m.rndOctX2F}
-	pExtSaveStateF = true
+
 	if debug or m.debug then PrintTable(noteOptionsCb.val1) end
 end
 
@@ -1537,10 +1536,10 @@ keyDrop.onLClick = function()
 	m.key = keyDrop.val1
 	m.root = SetRootNote(m.oct, m.key)	
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
+	
 	-- set project ext state
 	pExtState.key = m.key
 	pExtState.root = m.root
-	pExtSaveStateF = true
 end
 -- Octave droplist
 octDrop.onLClick = function()
@@ -1549,10 +1548,10 @@ octDrop.onLClick = function()
 	
 	m.oct = octDrop.val1
 	m.root = SetRootNote(m.oct, m.key)
+	
 	-- set project ext state	
 	pExtState.oct = m.oct
 	pExtState.root = m.root
-	pExtSaveStateF = true
 end
 -- Scale droplist
 scaleDrop.onLClick = function()
@@ -1564,9 +1563,9 @@ scaleDrop.onLClick = function()
 		m.rndAllNotesF  = false
 	end
 	UpdateSliderLabels(t_noteSliders, m.preNoteProbTable)
+
 	-- set project ext state	
 	pExtState.curScaleName = scaleDrop.val2[scaleDrop.val1]
-	pExtSaveStateF = true
 end	
 
 -- Set default scale options
@@ -1636,12 +1635,12 @@ probSldrText.onRClick = function()
 		for k, v in pairs(t_noteSliders) do -- reset the sliders
 			if v.label ~= "" then v.val1 = 1 end
 		end -- in pairs(t_noteSliders)
+		
 		if pExtState.noteSliders then -- write the new proj ext state
 			for k, v in pairs(t_noteSliders) do
 				if v.label ~= "" then pExtState.noteSliders[k] = v.val1 end
 			end -- in pairs(t_noteSliders)
 		end -- pExtState.noteSliders
-		pExtSaveStateF = true	-- set the ext state save flag
 	end -- result
 end
 
@@ -1658,7 +1657,6 @@ octProbText.onRClick = function()
 		if pExtState.rndOctProb then -- write the new proj ext state
 				pExtState.rndOctProb = nil
 		end -- pExtState.noteSliders
-	pExtSaveStateF = true	-- set the ext state save flag
 	end -- result
 end
 
@@ -1687,6 +1685,9 @@ function SetDefaultSeqOptions()
 	seqOptionsCb.val1[4] = (true and m.seqLegatoF) and 1 or 0 -- legato
 	seqOptionsCb.val1[5] = (true and m.seqRndNotesF) and 1 or 0 -- random notes
 	seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0 -- repeat
+	
+	-- store the project state
+	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
 end
 -- Sequencer options toggle logic 
 seqOptionsCb.onLClick = function()
@@ -1707,7 +1708,7 @@ seqOptionsCb.onLClick = function()
 	end
 	
 	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
-	pExtSaveStateF = true
+
 	if debug or m.debug then PrintTable(seqOptionsCb.val1) end
 end
 
@@ -1787,7 +1788,6 @@ seqSldrText.onRClick = function()
 			pExtState.seqGrid4 = nil
 			
 		end -- seqGridRad
-		pExtSaveStateF = true	-- set the ext state save flag
 	end -- result
 end
 
@@ -1833,7 +1833,6 @@ seqAccSldrText.onRClick = function()
 		if pExtState.seqAccRSldrHi then pExtState.seqAccRSldrHi = nil end
 		seqAccProbSldr.val1 = m.accentProb
 		if pExtState.seqAccProb then pExtState.seqAccProb = nil end
-		pExtSaveStateF = true	-- set the ext state save flag
 	end -- result
 end
 -- Reset sequencer legato sliders
@@ -1847,7 +1846,6 @@ seqLegSldrText.onRClick = function()
 	if result == 1 then 
 		seqLegProbSldr.val1 = m.legatoProb
 		if pExtState.seqLegProb then pExtState.seqLegProb = nil end
-		pExtSaveStateF = true
 	end -- result
 end
 
@@ -1981,7 +1979,6 @@ function ResetSeqRepeater()
 	seqLoopNumDrop.val1 = 1; m.loopNum = 1
 	-- save state
 	pExtState.seqOptionsCb[6] = m.seqRepeatF
-	pExtSaveStateF = true
 end
 -- Glue sequencer repeater
 function GlueSeqRepeater()
@@ -1998,12 +1995,8 @@ function GlueSeqRepeater()
 	
 	-- reset the drop down lists and pExtState
 	seqLoopStartDrop.val1 = 1; m.loopStartG = 1
-	--if pExtState.loopStartG then pExtState.loopStartG = nil end
 	seqLoopLenDrop.val1 = 1; m.loopLenG = 1
-	--if pExtState.loopLenG then pExtState.loopLenG = nil end
 	seqLoopNumDrop.val1 = 1; m.loopNum = 1
-	--if pExtState.loopNum then pExtState.loopNum = nil end
-	--pExtSaveStateF = true	-- set the ext state save flag
 end
 -- Right-click handler
 seqLoopText.onRClick = function()
@@ -2173,7 +2166,7 @@ eucOptionsCb.onLClick = function()
 	m.eucRndNotesF = eucOptionsCb.val1[3] == 1 and true or false -- Randomise notes
 	
 	pExtState.eucOptionsCb = {m.eucF, m.eucAccentF, m.eucRndNotesF}
-	pExtSaveStateF = true
+
 	if debug or m.debug then PrintTable(eucOptionsCb.val1) end
 end
 
@@ -2206,7 +2199,6 @@ txtEuclidLabel.onRClick = function()
 		euclidPulsesSldr.val1 = m.eucPulses
 		euclidStepsSldr.val1 = m.eucSteps
 		euclidRotationSldr.val1 = m.eucRot
-		pExtSaveStateF = true
 		pExtState.eucSliders = nil
 	end -- result
 end
@@ -2258,7 +2250,7 @@ randomBtn.onLClick = function()
 	-- turn off and reset shifter and repeater
 	ResetSeqShifter()
 	ResetSeqRepeater()
-	InsertNotes()
+	--InsertNotes()
 	-- generate the probability tables
 	GenProbTable(m.preNoteProbTable, t_noteSliders, m.noteProbTable)
 	if #m.noteProbTable == 0 then return end
@@ -2272,7 +2264,6 @@ randomBtn.onLClick = function()
 		pExtState.noteSliders[k] = v.val1
 	end
 	pExtState.rndOctProb = octProbSldr.val1
-	pExtSaveStateF = true
 end 
 -- Sequencer
 sequenceBtn.onLClick = function()
@@ -2281,15 +2272,16 @@ sequenceBtn.onLClick = function()
 	if not m.activeTake then return end
 	
 	-- turn off and reset shift
-	local t_shift = table.pack(m.seqShift, m.seqShiftMin, m.seqShiftMax)
+	local t_shift = table.pack(m.seqShift, m.seqShiftMin, m.seqShiftMax) -- required?
 	ResetSeqShifter()
 	
 	-- backup repeat
 		local t_repeat = table.pack(m.loopStartG, m.loopLenG, m.loopNum, m.seqRepeatF)	
 	
 	if m.seqF then
-		if m.seqRepeatF then -- temporarily turn off repeat
-			m.seqRepeatF = false
+		if m.seqRepeatF then -- temporarily turn off repeat, if it was on
+			m.seqRepeatF = false -- remember it was on...
+			m.seqRepeatState = true
 			seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
 			seqLoopStartDrop.val1 = 1; m.loopStartG = 1
 			seqLoopLenDrop.val1   = 1; m.loopLenG   = 1
@@ -2303,14 +2295,18 @@ sequenceBtn.onLClick = function()
 		GetNotesFromTake()
 		GenSequence(m.seqProbTable, m.accProbTable, seqAccRSldr, m.legProbTable)
 		if m.seqRndNotesF then randomBtn.onLClick() end
-		-- restore and turn on repeat
-		m.loopStartG, m.loopLenG, m.loopNum, m.seqRepeatF = table.unpack(t_repeat)
-		seqLoopNumDrop.val1   = m.loopNum	
-		seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
-		seqLoopStartDrop.val1 = m.loopStartG
-		seqLoopLenDrop.val1   = m.loopLenG
-		seqLoopNumDrop.val1   = m.loopNum
-		if m.seqRepeatF then InsertNotes() end		
+		-- restore and turn on repeat, if it was previously on...
+		if m.seqRepeatState then
+			m.loopStartG, m.loopLenG, m.loopNum, m.seqRepeatF = table.unpack(t_repeat)
+			seqLoopNumDrop.val1   = m.loopNum	
+			seqOptionsCb.val1[6] = (true and m.seqRepeatF) and 1 or 0
+			seqLoopStartDrop.val1 = m.loopStartG
+			seqLoopLenDrop.val1   = m.loopLenG
+			seqLoopNumDrop.val1   = m.loopNum
+			InsertNotes()
+			m.seqRepeatState = false
+		end
+		-- if m.seqRepeatF then InsertNotes() end		
 		
 	else -- not m.seqF
 		GenAccentTable(m.accProbTable, seqAccRSldr, seqAccProbSldr)
@@ -2318,9 +2314,7 @@ sequenceBtn.onLClick = function()
 		GetNotesFromTake() 
 		GenNoteAttributes(m.seqAccentF, m.accProbTable, seqAccRSldr, m.seqLegatoF, m.legProbTable)
 		
-		if m.seqRndNotesF then 
-			randomBtn.onLClick()
-		end		
+		if m.seqRndNotesF then randomBtn.onLClick() end		
 	end  -- m.seqF
 	
 	-- set project ext state
@@ -2342,11 +2336,11 @@ sequenceBtn.onLClick = function()
 			pExtState.seqGrid4[k] = v.val1
 		end
 	end	
+	pExtState.seqOptionsCb = {m.seqF, m.seqFirstNoteF, m.seqAccentF, m.seqLegatoF, m.seqRndNotesF, m.seqRepeatF}
 	pExtState.seqAccRSldrLo = seqAccRSldr.val1
 	pExtState.seqAccRSldrHi = seqAccRSldr.val2
 	pExtState.seqAccProb = seqAccProbSldr.val1
 	pExtState.seqLegProb = seqLegProbSldr.val1
-	pExtSaveStateF = true
 end
 -- Sequencer grid toggle logic
 seqGridRad.onLClick = function() -- change grid size
@@ -2433,7 +2427,6 @@ euclidBtn.onLClick = function()
 		for k, v in pairs(t_euclidSliders) do
 			pExtState.eucSliders[k] = v.val1
 		end
-		pExtSaveStateF = true
 	end -- m.activeTake
 end
 
@@ -2497,13 +2490,11 @@ function InitMidiExMachina()
 	end -- m.activeEditor
 	
 	-- Load ProjectExtState
-		if pExtLoadStateF then
-			__, pExtStateStr = reaper.GetProjExtState(0, "MEM", "pExtState")
-			if pExtStateStr ~= "" then
-				pExtState = unpickle(pExtStateStr)
-			end -- pExtStateStr
-		end -- pExtLoadStateF
-	
+	__, pExtStateStr = reaper.GetProjExtState(0, "MEM", "pExtState")
+	if pExtStateStr ~= "" then 
+		pExtState = unpickle(pExtStateStr)
+	end -- pExtStateStr
+		
 	-- set GUI defaults or restore from project state
 	SetDefaultWindowOpts();	SetDefaultLayer() 
 	SetDefaultScaleOpts()
@@ -2513,7 +2504,7 @@ function InitMidiExMachina()
 	SetDefaultEucOptions(); SetDefaultEucSliders()
 
 	-- some pExtState stuff required early...
-	pExtState.seqOptionsCb = {}
+	if not pExtState.seqOptionsCb then pExtState.seqOptionsCb = {} end
 	if debug or m.debug then ConMsg("End InitMidiExMachina()") end
 end
 --------------------------------------------------------------------------------
@@ -2534,6 +2525,7 @@ end
 -- Mainloop
 --------------------------------------------------------------------------------
 function MainLoop()
+	local debug = false
 	-- Update mouse state and position
 	if gfx.mouse_cap & 1 == 1   and gLastMouseCap & 1  == 0 or    -- L mouse
 		 gfx.mouse_cap & 2 == 2   and gLastMouseCap & 2  == 0 or    -- R mouse
@@ -2571,23 +2563,16 @@ function MainLoop()
 		reaper.defer(MainLoop) 
 	else
 		if debug or m.debug then ConMsg("quitting.....") end
-		-- reset the shifter and repeater here...
-		--ResetSeqRepeater()
-		--ResetSeqShifter()
-		InsertNotes()
+
+		InsertNotes() -- capture any shifted or repeated notes
+		
 		-- Check and save window position
 		__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
-		if m.win_x ~= pExtState.win_x or m.win_y ~= pExtState.win_y then	
-			m.win_x = pExtState.win_x
-			m.win_y = pExtState.win_y
-			pExtSaveStateF = true
-		end	
 		
-		if pExtSaveStateF then -- quiting, save script state
-			pExtStateStr = pickle(pExtState)
-			reaper.SetProjExtState(0, "MEM", "pExtState", pExtStateStr )
-			--pExtSaveStateF = false
-		end
+		-- Pickle 
+		pExtStateStr = pickle(pExtState)
+		reaper.SetProjExtState(0, "MEM", "pExtState", pExtStateStr )
+
 	end
 	
 	-- Update Reaper GFX
