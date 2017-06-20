@@ -109,7 +109,7 @@ m.seqRndNotesF = true -- randomise notes (option)
 m.seqRepeatF = false -- repeat sequence by grid length
 m.seqShiftF = false -- shift sequence by grid length
 m.legato = 10 -- default legatolessness value
-m.legQ = 240
+m.legQ = 240 -- default is 1/16 - is set when changing the grid
 m.accentLow = 100; m.accentHigh = 127; m.accentProb = 5 -- default values (options)
 -- accentLow/High - min 0, max 127; accentProb - min 0, max 10
 m.legatoProb = 5 -- default value (option - min 0, max 10)
@@ -491,6 +491,15 @@ function GetPermuteScaleFromTake(t)
 	end -- m.activeTake	
 end
 --------------------------------------------------------------------------------
+-- Quantise(ppqn) note length quantisation
+--------------------------------------------------------------------------------
+function Quantise(ppqn)
+	local div = math.floor(ppqn / m.legQ + 0.5)
+	if div < 1 then div = 1 end
+	local leg = ppqn % m.legQ
+	return div * m.legQ, leg
+end
+--------------------------------------------------------------------------------
 -- GetNotesFromTake() - fill a note buffer from the active take, returns a table
 --------------------------------------------------------------------------------
 function GetNotesFromTake()
@@ -502,7 +511,7 @@ function GetNotesFromTake()
 		local _retval, num_notes, num_cc, num_sysex = reaper.MIDI_CountEvts(m.activeTake)
 		if num_notes > 0 then
 			t = GetNoteBuf(); if t == nil then t = NewNoteBuf() end
-			local div, rem, noteLen
+			local div, leg, noteLen
 			ClearTable(t)
 			for i = 1, num_notes do
 				_retval, selected, muted, startppq, endppq, channel, pitch, velocity = reaper.MIDI_GetNote(m.activeTake, i-1)
@@ -510,17 +519,19 @@ function GetNotesFromTake()
 				t[i][1] = selected
 				t[i][2] = muted
 				t[i][3] = startppq
+				--t[i][3] = Quantise(startppq)
 					noteLen = endppq - startppq
 					div = math.floor(noteLen / m.legQ + 0.5)
 					if div < 1 then div = 1 end
-					rem = noteLen % m.legQ
+					leg = noteLen % m.legQ
 					noteLen = div * m.legQ
 				t[i][4] = startppq + noteLen
+				--t[i][4], leg = Quantise(endppq)
 				t[i][5] = noteLen			
 				t[i][6] = channel
 				t[i][7] = pitch
 				t[i][8] = velocity
-				t[i][9] = rem == 0 and true or false
+				t[i][9] = leg == 0 and true or false
 			end -- for i				
 		end -- num_notes
 		if debug or m.debug then PrintNotes(t) end
@@ -1013,7 +1024,7 @@ function SeqRepeater(t1)
 			t2[i][2] = v[2] -- muted
 			t2[i][3] = v[3] -- startppqn					
 			t2[i][4] = v[4] -- endppqn
-			if not t2[i][9] then t2[i][4] = t2[i][4] - m.legato end -- handle legatolessness
+			--if not t2[i][9] then t2[i][4] = t2[i][4] - m.legato end -- handle legatolessness
 			t2[i][5] = v[5] -- length
 			t2[i][6] = v[6] -- channel
 			t2[i][7] = v[7] -- pitch
@@ -1035,7 +1046,7 @@ function SeqRepeater(t1)
 				t2[i][2] = v[2] -- muted
 				t2[i][3] = v[3] + writeOffP -- startppqn
 				if v[4] > loopEndP then t2[i][4] = loopEndP + writeOffP else t2[i][4] = v[4] + writeOffP end -- endppqn
-				if not t2[i][9] then t2[i][4] = t2[i][4] - m.legato end -- handle legatolessness
+				--if not t2[i][9] then t2[i][4] = t2[i][4] - m.legato end -- handle legatolessness
 				t2[i][5] = v[5] -- length
 				t2[i][6] = v[6] -- channel
 				t2[i][7] = v[7] -- pitch
@@ -1065,7 +1076,7 @@ function SeqRepeater(t1)
 			t2[i][2] = v[2] -- muted
 			t2[i][3] = v[3] + writeOffP -- startppqn
 			if v[4] > itemLenP then t2[i][4] = itemLenP else t2[i][4] = v[4] + writeOffP end -- endppqn
-			if not t2[i][9] then t2[i][4] = t2[i][4] - m.legato end -- handle legatolessness
+			--if not t2[i][9] then t2[i][4] = t2[i][4] - m.legato end -- handle legatolessness
 			t2[i][5] = v[5] -- channel
 			t2[i][6] = v[6] -- channel
 			t2[i][7] = v[7] -- pitch
@@ -1104,6 +1115,7 @@ function InsertNotes()
 
 	DeleteNotes()
 	for k, v in pairs(t3) do
+		v[4] = Quantise(v[4])
 		if not v[9] then v[4] = v[4] - m.legato end -- handle legatolessness
 		reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)	
 	end -- for k, v t3
