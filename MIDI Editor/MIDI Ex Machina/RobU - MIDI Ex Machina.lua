@@ -28,9 +28,12 @@
 @donation https://www.paypal.me/RobUrquhart
 @link Reaper http://reaper.fm
 @link Forum Thread http://reaper.fm
-@version 1.3.2
+@version 1.3.7
 @author RobU
 @changelog
+	v1.3.7
+	added sequence repeater
+	many bug fixes
 	v1.3.2
 	fixed bug all note sliders at zero causes crash
 	added sequencer note shifter (left / right by grid size)
@@ -152,10 +155,39 @@ m.scales = {
 -- a list of scales available to the note randomiser, more can be added manually if required
 -- each value is the interval step from the root note of the scale (0) including the octave (12)
 
+m.euclidPresets = {
+	-- Euclidean Rhythms
+	{2,  5,  0,  name = "Persian 1"},
+	{3,  7,  0,  name = "Bulgarian 1"},
+	{4,  9,  0,  name = "Turkish"},
+	{5,  11, 0,  name = "Classical"},
+	{5,  16, 0,  name = "Brazilian 1"},
+	-- Reverse Euclidean Rhythms
+	{2,  3,  2,  name = "Latin America"},
+	{3,  4,  2,  name = "Trinidad"},
+	{3,  5,  0,  name = "Persian 2"},
+	{3,  8,  0,  name = "West African 1"},
+	{4,  7,  0,  name = "Bulgarian 2"},
+	{4,  11, 0,  name = "Frank Zappa"},
+	{5,  6,  2,  name = "Arabian 1"},
+	{5,  7,  6,  name = "Arabian 2"},
+	{5,  9,  0,  name = "South African 1"},
+	{5,  12, 10, name = "South African 2"},
+	{7,  8,  2,  name = "Libyan Taureg"},
+	{7,  16, 12, name = "Brazilian 3"}, 
+	{11, 24, 5,  name = "Central African 1"},
+	-- Non-Euclidean Rhythms
+	{1,  4,  0,  name = "Kick 4 x 4"},
+	{5,  8,  0,  name = "West African 2"},
+	{7,  12, 10, name = "West African 3"},
+	{9,  16, 12, name = "Brazilian 4"},
+	{13, 24, 16, name = "Central African 2"}
+	
+}
 -- textual list of the available scale names for the GUI list selector
-m.scalelist = {}
+m.scalelist = {}; m.euclidlist = {}
 m.curScaleName = "Chromatic" -- (option - !must be a valid scale name!)
-
+m.curEuclidName = "Persian 1" -- (option - !must be a valid euclid preset name!)
 -- various probability tables
 m.preNoteProbTable = {};  m.noteProbTable = {}
 m.preSeqProbTable = {};   m.seqProbTable  = {}
@@ -1096,33 +1128,34 @@ end
 function InsertNotes()
 	local debug = false
 	if debug or m.debug then ConMsg("InsertNotes()") end
+
+	if m.activeTake then
+		local t1, t2, t3 = GetNoteBuf(), nil, nil
 	
-	local t1, t2, t3 = GetNoteBuf(), nil, nil
-
-	-- note shifter
-	if m.seqShiftF then
-		t2 = SeqShifter(t1)
-	else
-		t2 = {}; CopyTable(t1, t2)
-	end
-
-	-- note repeater
-	if m.seqRepeatF then 
-		t3 = SeqRepeater(t2)
-	else
-		t3 = {}; CopyTable(t2, t3)
-	end
-
-	DeleteNotes()
-	for k, v in pairs(t3) do
-		v[4] = Quantise(v[4])
-		if not v[9] then v[4] = v[4] - m.legato end -- handle legatolessness
-		reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)	
-	end -- for k, v t3
-		
-	reaper.MIDI_Sort(m.activeTake)
-	reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+		-- note shifter
+		if m.seqShiftF then
+			t2 = SeqShifter(t1)
+		else
+			t2 = {}; CopyTable(t1, t2)
+		end
 	
+		-- note repeater
+		if m.seqRepeatF then 
+			t3 = SeqRepeater(t2)
+		else
+			t3 = {}; CopyTable(t2, t3)
+		end
+	
+		DeleteNotes()
+		for k, v in pairs(t3) do
+			v[4] = Quantise(v[4])
+			if not v[9] then v[4] = v[4] - m.legato end -- handle legatolessness
+			reaper.MIDI_InsertNote(m.activeTake, v[1], v[2], v[3], v[4], v[6], v[7], v[8], false)	
+		end -- for k, v t3
+			
+		reaper.MIDI_Sort(m.activeTake)
+		reaper.MIDIEditor_OnCommand(m.activeEditor, 40435) -- all notes off
+	end -- active take
 end
 --------------------------------------------------------------------------------
 -- PrintNotes - arg note_buffer t; print note_buffer to reaper console
@@ -1255,16 +1288,20 @@ local noteOptionText = e.Textbox:new({1}, nx+(np*14)+20, 210, (nw*4), 20, e.col_
 -- sequence generate button
 local sequenceBtn = e.Button:new({2}, 25, 205, 100, 25, e.col_yellow, "Generate", m.defFont, m.defFontSz, e.col_grey8)
 local sx, sy, sw, sh, sp = 140, 50, 30, 150, 40
+
 -- sequencer grid size radio selector
 local seqGridRad = e.Rad_Button:new({2,3}, sx, sy + 40, 30, 30, e.col_yellow, "", m.defFont, m.defFontSz, e.col_grey8, 1, {"1/16", "1/8", "1/4"})
 local seqGridText = e.Textbox:new({2,3}, sx+5, 210, (sw*2)+5, 20, e.col_grey5, "Grid Size", m.defFont, m.defFontSz, e.col_grey7)
+
 -- sequence grid probability sliders
 local seqSldr16   = e.Vert_Slider:new({2}, sx+(sp*2)+20,  sy, sw, sh, e.col_blue, "1/16",  m.defFont, m.defFontSz, e.col_grey8, 0, 0, 0, m.defFontSz, 1)
 local seqSldr8    = e.Vert_Slider:new({2}, sx+(sp*3)+20,  sy, sw, sh, e.col_blue, "1/8",   m.defFont, m.defFontSz, e.col_grey8, 0, 0, 0, m.defFontSz, 1)
 local seqSldr4    = e.Vert_Slider:new({2}, sx+(sp*4)+20,  sy, sw, sh, e.col_blue, "1/4",   m.defFont, m.defFontSz, e.col_grey8, 0, 0, 0, m.defFontSz, 1)
 local seqSldrRest = e.Vert_Slider:new({2}, sx+(sp*5)+20,  sy, sw, sh, e.col_blue, "Rest",  m.defFont, m.defFontSz, e.col_grey8, 0, 0, 0, m.defFontSz, 1)
+
 -- sequence grid probability slider table
 local t_seqSliders = {seqSldr16, seqSldr8, seqSldr4, seqSldrRest}
+
 -- sequence grid probability sliders label - right click to reset all (per grid size selection)
 local seqSldrText = e.Textbox:new({2}, sx+(sp * 2)+20, 210, (sw * 5), 20, e.col_grey5, "Size Weight Sliders", m.defFont, m.defFontSz, e.col_grey7)
 
@@ -1297,15 +1334,20 @@ local seqOptionsCb = e.Checkbox:new({2}, sx+(np * 15) + 10, sy + 5, 30, 30, e.co
 --------------------------------------------------------------------------------
 -- euclid generate button
 local euclidBtn = e.Button:new({3}, 25, 205, 100, 25, e.col_orange, "Generate", m.defFont, m.defFontSz, e.col_grey8)
+
 -- euclidean sliders
 local ex, ey, ew, eh, ep = 160, 50, 30, 150, 40
 local euclidPulsesSldr = e.Vert_Slider:new({3}, ex+(ep*2), ey, ew, eh, e.col_blue, "Puls", m.defFont, m.defFontSz, e.col_grey8, m.eucPulses, 0, 1, 24, 1)
 local euclidStepsSldr = e.Vert_Slider:new({3}, ex+(ep*3), ey, ew, eh, e.col_blue, "Step", m.defFont, m.defFontSz, e.col_grey8, m.eucSteps, 0, 1, 24, 1)
 local euclidRotationSldr = e.Vert_Slider:new({3}, ex+(ep*4), ey, ew, eh, e.col_blue, "Rot",  m.defFont, m.defFontSz, e.col_grey8, m.eucRot, 0, 0, 24, 1)
 local t_euclidSliders = {euclidPulsesSldr, euclidStepsSldr, euclidRotationSldr}
+
 -- euclid slider label - right click to reset all
 local txtEuclidLabel = e.Textbox:new({3}, ex + (ep * 2), 210, (ew * 3) + 20, 20, e.col_grey5, "Euclid Sliders", m.defFont, m.defFontSz, e.col_grey7)
--- Sequencer options
+
+-- euclid presets
+local euclidDrop = e.Droplist:new({3}, ex + 415, 70, 100, 20, e.col_blue, "Presets", m.defFont, m.defFontSz, e.col_grey8, 1, m.euclidlist)
+-- euclid options
 local eucOptionsCb = e.Checkbox:new({3},  ex + (ep * 15)- 10, ey + 40, 30, 30, e.col_orange, "", m.defFont, m.defFontSz, e.col_grey8, {0,0,0}, {"Generate", "Accent", "Rnd Notes"})
 
 --------------------------------------------------------------------------------
@@ -1323,7 +1365,7 @@ local msgText = e.Textbox:new({9}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.w
 --------------------------------------------------------------------------------
 local t_Buttons = {randomBtn, sequenceBtn, seqShiftLBtn, seqShiftRBtn, euclidBtn}
 local t_Checkboxes = {noteOptionsCb, seqOptionsCb, eucOptionsCb}
-local t_Droplists2 = {seqLoopLenDrop, seqLoopNumDrop, seqLoopStartDrop}
+local t_Droplists2 = {seqLoopLenDrop, seqLoopNumDrop, seqLoopStartDrop, euclidDrop}
 local t_RadButtons = {seqGridRad}
 local t_RSliders = {octProbSldr, seqAccRSldr, seqAccProbSldr, seqLegProbSldr}
 local t_Textboxes = {probSldrText, octProbText, seqGridText, seqSldrText, seqShiftVal, seqLoopText, seqShiftText, seqAccSldrText, seqLegSldrText, txtEuclidLabel, optText, msgText}
@@ -2161,6 +2203,21 @@ function SetDefaultEucOptions()
 		m.eucAccentF   = pExtState.eucOptionsCb[2] ==  true and true or false
 		m.eucRndNotesF = pExtState.eucOptionsCb[3] ==  true and true or false
 	end
+	
+-- create a euclid preset name lookup table for the gui (euclidDrop)
+	for k, v in pairs(m.euclidPresets) do
+		m.euclidlist[k] = m.euclidPresets[k]["name"]
+	end
+	-- if euclid preset name saved in project state, load it
+	if pExtState.curEuclidName then
+		m.curEuclidName = pExtState.curEuclidName
+	end
+	-- update the euclid dropbox val1 to match the euclid table index
+	for k, v in pairs(m.euclidPresets) do 
+		if v.name == m.curEuclidName then euclidDrop.val1 = k	end
+	end	
+
+--	SetEuclid(m.curEuclidName, m.euclidPresets)	--set chosen preset
 	
 	-- set euclidean options using defaults, or loaded project state
 	eucOptionsCb.val1[1] = (true and m.eucF) and 1 or 0 -- generate
