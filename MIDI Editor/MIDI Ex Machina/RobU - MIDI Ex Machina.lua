@@ -2309,6 +2309,25 @@ euclidRotationSldr.onMove = function()
 	end
 end
 
+-- Euclid Presets
+euclidDrop.onLClick = function()
+	local debug = false
+	if debug or m.debug then ConMsg("\neuclidDrop.onLClick()") end
+	
+	local preset = {} 
+	
+	for i = 1, #m.euclidPresets, 1 do
+		if euclidDrop.val2[euclidDrop.val1] == m.euclidPresets[i].name then
+			preset = m.euclidPresets[i]
+		end
+	end
+	
+	euclidPulsesSldr.val1   = preset[1]
+	euclidStepsSldr.val1    = preset[2]
+	euclidRotationSldr.val1 = preset[3]
+	euclidRotationSldr.max  = euclidStepsSldr.val1
+end	
+
 -- Main action elements
 -- Randomiser
 randomBtn.onLClick = function()
@@ -2496,6 +2515,8 @@ euclidBtn.onLClick = function()
 		for k, v in pairs(t_euclidSliders) do
 			pExtState.eucSliders[k] = v.val1
 		end
+		pExtState.curEuclidName = euclidDrop.val2[euclidDrop.val1]
+		
 	end -- m.activeTake
 end
 
