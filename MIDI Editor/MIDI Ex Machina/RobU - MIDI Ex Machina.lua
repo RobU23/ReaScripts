@@ -2249,6 +2249,7 @@ function SetDefaultEucSliders()
 		for k, v in pairs(t_euclidSliders) do
 			v.val1 = pExtState.eucSliders[k]
 		end
+		
 	else
 	
 		euclidPulsesSldr.val1 = m.eucPulses
@@ -2314,18 +2315,22 @@ euclidDrop.onLClick = function()
 	local debug = false
 	if debug or m.debug then ConMsg("\neuclidDrop.onLClick()") end
 	
-	local preset = {} 
+	local p = {} 
 	
 	for i = 1, #m.euclidPresets, 1 do
 		if euclidDrop.val2[euclidDrop.val1] == m.euclidPresets[i].name then
-			preset = m.euclidPresets[i]
+			p = m.euclidPresets[i]
 		end
 	end
 	
-	euclidPulsesSldr.val1   = preset[1]
-	euclidStepsSldr.val1    = preset[2]
-	euclidRotationSldr.val1 = preset[3]
+	euclidPulsesSldr.val1   = p[1]
+	euclidStepsSldr.val1    = p[2]
+	euclidRotationSldr.val1 = p[3]
 	euclidRotationSldr.max  = euclidStepsSldr.val1
+
+	-- save pExtState	
+	pExtState.eucSliders = {p[1], p[2], p[3]}
+	pExtState.curEuclidName = euclidDrop.val2[euclidDrop.val1]
 end	
 
 -- Main action elements
@@ -2515,7 +2520,7 @@ euclidBtn.onLClick = function()
 		for k, v in pairs(t_euclidSliders) do
 			pExtState.eucSliders[k] = v.val1
 		end
-		pExtState.curEuclidName = euclidDrop.val2[euclidDrop.val1]
+		
 		
 	end -- m.activeTake
 end
