@@ -76,7 +76,7 @@ local p = require 'persistence' -- currently unused, i.e. no preset save, load, 
 --------------------------------------------------------------------------------
 m = {} -- all ex machina data
 -- user changeable defaults are marked with "(option)"
-m.debug = false
+m.debug = true
 -- window
 m.win_title = "RobU : MIDI Ex Machina - v1.37"; m.win_dockstate = 0
 m.win_x = 10; m.win_y = 10; m.win_w = 900; m.win_h = 280 -- window dimensions
@@ -1400,6 +1400,7 @@ zoomDrop.onLClick = function() -- window scaling
 	-- set soom
 	if pExtState.win_x ~= m.win_x then
 		__, m.win_x, m.win_y, __, __ = gfx.dock(-1,0,0,0,0)
+		ConMsg(m.win_x, m.win_y)
 	pExtState.win_x = m.win_x
 	pExtState.win_y = m.win_y
 	end
@@ -2648,7 +2649,7 @@ function MainLoop()
 	gLastMouseCap = gfx.mouse_cap
 	gLastMouseX, gLastMouseY = gfx.mouse_x, gfx.mouse_y
 	gfx.mouse_wheel = 0 -- reset gfx.mouse_wheel
-
+	__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
 	-- Get passthrough key for play/stop (spacebar)
 	char = gfx.getchar()
 	if char == 32 then reaper.Main_OnCommand(40044, 0) end
