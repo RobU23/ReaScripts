@@ -1397,10 +1397,11 @@ zoomDrop.onLClick = function() -- window scaling
 
 	if debug or m.debug then ConMsg("zoom = " .. tostring(e.gScale)) end
 
+	__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
 	-- set soom
 	if pExtState.win_x ~= m.win_x then
 		__, m.win_x, m.win_y, __, __ = gfx.dock(-1,0,0,0,0)
-		ConMsg(m.win_x, m.win_y)
+		ConMsg("m.win_x = " .. tostring(m.win_x) .. "m.win_y = " .. tostring(m.win_y))
 	pExtState.win_x = m.win_x
 	pExtState.win_y = m.win_y
 	end
@@ -2649,7 +2650,7 @@ function MainLoop()
 	gLastMouseCap = gfx.mouse_cap
 	gLastMouseX, gLastMouseY = gfx.mouse_x, gfx.mouse_y
 	gfx.mouse_wheel = 0 -- reset gfx.mouse_wheel
-	__, pExtState.win_x, pExtState.win_y, __, __ = gfx.dock(-1,0,0,0,0)
+
 	-- Get passthrough key for play/stop (spacebar)
 	char = gfx.getchar()
 	if char == 32 then reaper.Main_OnCommand(40044, 0) end
