@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="RobU Scripts" commit="a8bcd5ad78b941a96b9620bafc4012f26cea5570">
+<index version="1" name="RobU Scripts" commit="2ac1c28669a5dc429a83b3c0e84e6230e8d14ce3">
   <category name="MIDI Editor/MIDI Ex Machina">
     <reapack name="RobU - MIDI Ex Machina.lua" type="script" desc="MIDI Ex Machina - Note Randomiser, Sequencer, and Euclidean Generator">
       <metadata>
@@ -89,6 +89,34 @@ added right-click reset for sliders (right-click the textbox)]]></changelog>
         <source file="eGUI.lua">https://github.com/RobU23/ReaScripts/raw/af80cdadc76b1dbe4fcfc4cc3f946f4b9df5dd36/MIDI%20Editor/MIDI%20Ex%20Machina/eGUI.lua</source>
         <source file="euclid.lua">https://github.com/RobU23/ReaScripts/raw/af80cdadc76b1dbe4fcfc4cc3f946f4b9df5dd36/MIDI%20Editor/MIDI%20Ex%20Machina/euclid.lua</source>
         <source file="persistence.lua">https://github.com/RobU23/ReaScripts/raw/af80cdadc76b1dbe4fcfc4cc3f946f4b9df5dd36/MIDI%20Editor/MIDI%20Ex%20Machina/persistence.lua</source>
+      </version>
+      <version name="1.3.3" author="RobU" time="2019-02-10T18:20:43Z">
+        <changelog><![CDATA[v1.3.3
+fixed looped item bug (thanks Thrash!)
+fixed scales (dorian), added some new, minor tweaks (thanks Mike!)
+added dirty OSX font cludge, might work, might not...
+v1.3.2
+fixed bug all note sliders at zero causes crash
+added sequencer note shifter (left / right by grid size)
+v1.3
+added monophonic sequence generator
+added euclidean sequence generator (bjorklund algorithm)
+added all/selected notes option
+added force first note to root option
+added randomise octave option
+added permute scale in note randomiser
+added force first note in sequence generator
+added velocity/accent randomisation to sequence/euclidean generators
+added legato randomisation to sequence generator
+added rotation slider to euclidean generator
+added active-take detection
+added undo/redo
+added script state save/restore to Reaper project file
+added right-click reset for sliders (right-click the textbox)]]></changelog>
+        <source main="midi_editor">https://github.com/RobU23/ReaScripts/raw/2ac1c28669a5dc429a83b3c0e84e6230e8d14ce3/MIDI%20Editor/MIDI%20Ex%20Machina/RobU%20-%20MIDI%20Ex%20Machina.lua</source>
+        <source file="eGUI.lua">https://github.com/RobU23/ReaScripts/raw/2ac1c28669a5dc429a83b3c0e84e6230e8d14ce3/MIDI%20Editor/MIDI%20Ex%20Machina/eGUI.lua</source>
+        <source file="euclid.lua">https://github.com/RobU23/ReaScripts/raw/2ac1c28669a5dc429a83b3c0e84e6230e8d14ce3/MIDI%20Editor/MIDI%20Ex%20Machina/euclid.lua</source>
+        <source file="persistence.lua">https://github.com/RobU23/ReaScripts/raw/2ac1c28669a5dc429a83b3c0e84e6230e8d14ce3/MIDI%20Editor/MIDI%20Ex%20Machina/persistence.lua</source>
       </version>
     </reapack>
   </category>
