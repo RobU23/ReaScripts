@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="RobU Scripts" commit="2ac1c28669a5dc429a83b3c0e84e6230e8d14ce3">
+<index version="1" name="RobU Scripts" commit="6fc14048fee05b74b2888e5a5a69061eabe3630f">
   <category name="MIDI Editor/MIDI Ex Machina">
     <reapack name="RobU - MIDI Ex Machina.lua" type="script" desc="MIDI Ex Machina - Note Randomiser, Sequencer, and Euclidean Generator">
       <metadata>
@@ -117,6 +117,14 @@ added right-click reset for sliders (right-click the textbox)]]></changelog>
         <source file="eGUI.lua">https://github.com/RobU23/ReaScripts/raw/2ac1c28669a5dc429a83b3c0e84e6230e8d14ce3/MIDI%20Editor/MIDI%20Ex%20Machina/eGUI.lua</source>
         <source file="euclid.lua">https://github.com/RobU23/ReaScripts/raw/2ac1c28669a5dc429a83b3c0e84e6230e8d14ce3/MIDI%20Editor/MIDI%20Ex%20Machina/euclid.lua</source>
         <source file="persistence.lua">https://github.com/RobU23/ReaScripts/raw/2ac1c28669a5dc429a83b3c0e84e6230e8d14ce3/MIDI%20Editor/MIDI%20Ex%20Machina/persistence.lua</source>
+      </version>
+      <version name="1.3.4" author="RobU" time="2019-02-12T22:15:57Z">
+        <changelog><![CDATA[v1.3.4
+fixed looped item note shifting bug]]></changelog>
+        <source main="midi_editor">https://github.com/RobU23/ReaScripts/raw/6fc14048fee05b74b2888e5a5a69061eabe3630f/MIDI%20Editor/MIDI%20Ex%20Machina/RobU%20-%20MIDI%20Ex%20Machina.lua</source>
+        <source file="eGUI.lua">https://github.com/RobU23/ReaScripts/raw/6fc14048fee05b74b2888e5a5a69061eabe3630f/MIDI%20Editor/MIDI%20Ex%20Machina/eGUI.lua</source>
+        <source file="euclid.lua">https://github.com/RobU23/ReaScripts/raw/6fc14048fee05b74b2888e5a5a69061eabe3630f/MIDI%20Editor/MIDI%20Ex%20Machina/euclid.lua</source>
+        <source file="persistence.lua">https://github.com/RobU23/ReaScripts/raw/6fc14048fee05b74b2888e5a5a69061eabe3630f/MIDI%20Editor/MIDI%20Ex%20Machina/persistence.lua</source>
       </version>
     </reapack>
   </category>
