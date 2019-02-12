@@ -28,31 +28,11 @@
 @donation https://www.paypal.me/RobUrquhart
 @link Reaper http://reaper.fm
 @link Forum Thread http://reaper.fm
-@version 1.3.3
+@version 1.3.4
 @author RobU
 @changelog
-	v1.3.3
-	fixed looped item bug (thanks Thrash!)
-	fixed scales (dorian), added some new, minor tweaks (thanks Mike!)
-	added dirty OSX font cludge, might work, might not...
-	v1.3.2
-	fixed bug all note sliders at zero causes crash
-	added sequencer note shifter (left / right by grid size)
-	v1.3
-	added monophonic sequence generator
-	added euclidean sequence generator (bjorklund algorithm)
-	added all/selected notes option
-	added force first note to root option
-	added randomise octave option
-	added permute scale in note randomiser
-	added force first note in sequence generator
-	added velocity/accent randomisation to sequence/euclidean generators
-	added legato randomisation to sequence generator
-	added rotation slider to euclidean generator
-	added active-take detection
-	added undo/redo
-	added script state save/restore to Reaper project file
-	added right-click reset for sliders (right-click the textbox)
+	v1.3.4
+	fixed looped item note shifting bug
 @provides
 	[main=midi_editor] .
 	[nomain] eGUI.lua
@@ -80,7 +60,7 @@ m = {} -- all ex machina data
 m.debug = false
 m.OS = reaper.GetOS()
 -- window
-m.win_title = "RobU : MIDI Ex Machina - v1.3.3"; m.win_dockstate = 0
+m.win_title = "RobU : MIDI Ex Machina - v1.3.4"; m.win_dockstate = 0
 m.win_x = 10; m.win_y = 10; m.win_w = 900; m.win_h = 280 -- window dimensions
 m.win_bg = {0, 0, 0} -- background colour
 m.def_zoom = 4 -- 100% (option)
@@ -123,7 +103,7 @@ m.legato = -10 -- default legatolessness value
 m.accentLow = 100; m.accentHigh = 127; m.accentProb = 3 -- default values (options)
 -- accentLow/High - min 0, max 127; accentProb - min 0, max 10
 m.legatoProb = 3 -- default value (option - min 0, max 10)
-m.seqGrid16 = {8, 8, 0, 4} -- sane default sequencer note length slider values
+m.seqGrid16 = {8, 4, 0, 2} -- sane default sequencer note length slider values
 m.seqGrid8  = {0, 8, 2, 2} -- sane default sequencer note length slider values
 m.seqGrid4  = {0, 2, 8, 1} -- sane default sequencer note length slider values
 m.seqShift = 0; m.seqShiftMin = -16; m.seqShiftMax = 16 -- shift notes left-right from sequencer
@@ -188,59 +168,32 @@ pExtStateStr = "" -- pickled string. a nom a nom a nom...
 -- Utility Functions Start
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
--- Bitfields - set, clear, flip, or check bits - returns a bitfield, or bool (check)
---------------------------------------------------------------------------------
-local function BitSet(bitField, bitIdx)
-	return bitField | (1 << bitIdx)
-end
---------------------------------------------------------------------------------
-local function BitClear(bitField, bitIdx)
-	return bitField & ~(1 << bitIdx)
-end
---------------------------------------------------------------------------------
-local function BitFlip(bitField, bitIdx)
-	return bitField ~ (1 << bitIdx)
-end
---------------------------------------------------------------------------------
-local function BitCheck(bitField, bitIdx)
-  return (bitField & (1 << bitIdx) ~= 0) and true or false
-end
---------------------------------------------------------------------------------
--- GetSign(n) -return -1 or 1
---------------------------------------------------------------------------------
-function GetSign(n)
-  return n > 0 and 1 or n < 0 and -1 or 1
-end
---------------------------------------------------------------------------------
--- Wrap(n, max) -return n wrapped between 'n' and 'max'
---------------------------------------------------------------------------------
+
 local function Wrap (n, max)
+-- Wrap(n, max) -return n wrapped between 'n' and 'max'	
 	n = n % max
 	if (n < 1) then n = n + max end
 	return n
 end
---------------------------------------------------------------------------------
--- RGB2Dec(r, g, b) - takes 8 bit r, g, b values, returns decimal (0 to 1)
---------------------------------------------------------------------------------
+
 local function RGB2Dec(r, g, b)
+-- RGB2Dec(r, g, b) - takes 8 bit r, g, b values, returns decimal (0 to 1)	
 	if r < 0 or r > 255 then r = wrap(r, 255) end
 	if g < 0 or g > 255 then g = wrap(g, 255) end
 	if b < 0 or b > 255 then b = wrap(b, 255) end
 	return r/255, g/255, b/255
 end
---------------------------------------------------------------------------------
--- RGB2Packed(r, g, b) - returns a packed rgb value
---------------------------------------------------------------------------------
+
 local function RGB2Packed(r, g, b)
+-- RGB2Packed(r, g, b) - returns a packed rgb value	
 	local floor = math.floor
 		g = (g << 8)
 		b = (b << 16)
 	return floor(r + g + b)
 end
---------------------------------------------------------------------------------
--- ConMsg(str) - outputs 'str' to the Reaper console
---------------------------------------------------------------------------------
+
 local function ConMsg(str)
+-- ConMsg(str) - outputs 'str' to the Reaper console
 	reaper.ShowConsoleMsg(str .."\n")
 end
 
@@ -331,20 +284,17 @@ end
 --------------------------------------------------------------------------------
 -- Ex Machina Functions Start
 --------------------------------------------------------------------------------
---------------------------------------------------------------------------------
--- ClearTable(t) - set all items in 2D table 't' to nil
---------------------------------------------------------------------------------
 function ClearTable(t)
+-- ClearTable(t) - set all items in 2D table 't' to nil	
 	local debug = false
 	if debug or m.debug then ConMsg("ClearTable()") end
 	for k, v in pairs(t) do
 		t[k] = nil
 	end
 end
---------------------------------------------------------------------------------
--- CopyTable(t1, t2) - copies note data from t1 to t2
---------------------------------------------------------------------------------
+
 function CopyTable(t1, t2)
+-- CopyTable(t1, t2) - copies note data from t1 to t2
 	ClearTable(t2)
 	local i = 1
 	while t1[i] do
@@ -358,9 +308,10 @@ function CopyTable(t1, t2)
 	end -- while t1[i]
 end
 --------------------------------------------------------------------------------
--- NewNoteBuf() - add a new note buffer to the table, returns handle
+-- Note Buffers
 --------------------------------------------------------------------------------
 local function NewNoteBuf()
+-- NewNoteBuf() - add a new note buffer to the table, returns handle
 	local debug = false
 	if debug or m.debug then ConMsg("NewNoteBuf()") end
 	m.notebuf.i = m.notebuf.i + 1
@@ -373,10 +324,9 @@ local function NewNoteBuf()
 	end
 	return m.notebuf[m.notebuf.i]
 end
---------------------------------------------------------------------------------
--- GetNoteBuf() - returns handle to the current note buffer
---------------------------------------------------------------------------------
+
 local function GetNoteBuf()
+-- GetNoteBuf() - returns handle to the current note buffer
 	local debug = false
 	if debug or m.debug then ConMsg("GetNoteBuf()") end
 	if m.notebuf.i >= 1 then
@@ -388,10 +338,9 @@ local function GetNoteBuf()
 		return m.notebuf[m.notebuf.i]
 	end
 end	
---------------------------------------------------------------------------------
--- UndoNoteBuf() - points to previous note buffer
---------------------------------------------------------------------------------
+
 local function UndoNoteBuf()
+-- UndoNoteBuf() - points to previous note buffer
 	local debug = false
 	if debug or m.debug then ConMsg("UndoNoteBuf()") end
 	if m.notebuf.i > 1 then
@@ -409,10 +358,9 @@ local function UndoNoteBuf()
 		end
 	end
 end
---------------------------------------------------------------------------------
--- PurgeNoteBuf() - purge all note buffers from current+1 to end
---------------------------------------------------------------------------------
+
 local function PurgeNoteBuf()
+-- PurgeNoteBuf() - purge all note buffers from current+1 to end
 	local debug = false
 	if debug or m.debug then
 		ConMsg("PurgeNoteBuf()")
@@ -426,6 +374,7 @@ local function PurgeNoteBuf()
 		m.notebuf.max = m.notebuf.max - 1
 	end  
 end
+
 --------------------------------------------------------------------------------
 -- GetItemLength(t) - get length of take 't', set various global vars
 -- currently it only returns the item length (used in Sequencer and Euclid)
@@ -433,30 +382,30 @@ end
 function GetItemLength()
 	local debug = false
 	if debug or m.debug then ConMsg("GetItemLength()") end
-	mItem = reaper.GetSelectedMediaItem(0, 0)
-	mItemLen = reaper.GetMediaItemInfo_Value(mItem, "D_LENGTH")
-	mBPM, mBPI = reaper.GetProjectTimeSignature2(0)
-	msPerMin = 60000
-	msPerQN = msPerMin / mBPM
-	numQNPerItem = (mItemLen * 1000) / msPerQN
-	numBarsPerItem = numQNPerItem / 4
-	ItemPPQN = numQNPerItem * m.ppqn
-	if debug or m.debug then
-		ConMsg("ItemLen (ms)    = " .. mItemLen)
-		ConMsg("mBPM            = " .. mBPM)
-		ConMsg("MS Per QN       = " .. msPerQN)
-		ConMsg("Num of QN       = " .. numQNPerItem)
-		ConMsg("Num of Bar      = " .. numBarsPerItem)
-		ConMsg("Item size ppqn  = " .. ItemPPQN .. "\n")
-	end
-	mItemTake = reaper.GetTake(mItem, 0) -- should fix looped items
-	ItemPPQN = reaper.BR_GetMidiSourceLenPPQ(mItemTake) -- thanks Thrash!
-	return ItemPPQN
+
+		mItem = reaper.GetSelectedMediaItem(0, 0)
+		mItemLen = reaper.GetMediaItemInfo_Value(mItem, "D_LENGTH")
+		mBPM, mBPI = reaper.GetProjectTimeSignature2(0)
+		msPerMin = 60000
+		msPerQN = msPerMin / mBPM
+		numQNPerItem = (mItemLen * 1000) / msPerQN
+		numBarsPerItem = numQNPerItem / 4
+		ItemPPQN = numQNPerItem * m.ppqn
+		if debug or m.debug then
+			ConMsg("ItemLen (ms)    = " .. mItemLen)
+			ConMsg("mBPM            = " .. mBPM)
+			ConMsg("MS Per QN       = " .. msPerQN)
+			ConMsg("Num of QN       = " .. numQNPerItem)
+			ConMsg("Num of Bar      = " .. numBarsPerItem)
+			ConMsg("Item size ppqn  = " .. ItemPPQN .. "\n")
+		end
+		mItemTake = reaper.GetTake(mItem, 0) -- should fix looped items
+		ItemPPQN = reaper.BR_GetMidiSourceLenPPQ(mItemTake) -- thanks Thrash!
+		return ItemPPQN
 end
---------------------------------------------------------------------------------
--- GetReaperGrid() - get the current grid size, set global var m.reaGrid
---------------------------------------------------------------------------------
+
 function GetReaperGrid(gridRad)
+-- GetReaperGrid() - get the current grid size, set global var m.reaGrid
 	local debug = false
 	if debug or m.debug then ConMsg("GetReaperGrid()") end
 	if m.activeTake then
@@ -935,24 +884,37 @@ function InsertNotes()
 	DeleteNotes()
 	local i = 1
 	if m.activeTake then
+		local noteLength = 0
 		local gridSize = m.reaGrid * m.ppqn
 		local itemLength = GetItemLength()	
 		local noteShift = m.seqShift * gridSize
 		local t1 = GetNoteBuf()	
 		local t2 = {} -- for note shifting
 		CopyTable(t1, t2)
+		if debug then ConMsg("itemPPQN = "..itemLength) end
+		if debug then ConMsg("noteshift = "..noteShift) end
+		
 		for k, v in pairs(t2) do -- do note shifting
+			noteLength = v[4] - v[3]
 			v[3] = v[3] + noteShift
-			v[4] = v[4] + noteShift			
-			if v[3] < 0 then
-				v[3] = itemLength + v[3]
-				v[4] = itemLength + v[4]	
-					if v[4] > itemLength then v[4] = itemLength + m.legato end
-			elseif v[3] >= itemLength then
+			v[4] = v[4] + noteShift	
+			
+			if v[3] >= itemLength then -- positive shift
 				v[3] = v[3] - itemLength
-				v[4] = v[4] - itemLength				
+				v[4] = v[4] - itemLength
+			
+			elseif v[3] < 0 then -- negative shift
+				v[3] = v[3] + itemLength
+				v[4] = v[4] + itemLength
+
 			end
+			
+			if v[4] > itemLength then v[4] = itemLength - 1 end	
+			
+			if debug then ConMsg("v3 = "..v[3].."    ".."v4 = "..v[4].."    ".."notelen = "..noteLength) end			
 		end
+
+		
 		while t2[i] do
 			reaper.MIDI_InsertNote(m.activeTake, t2[i][1], t2[i][2], t2[i][3], t2[i][4], t2[i][6], t2[i][7], t2[i][8], false)
 			--1=selected, 2=muted, 3=startppq, 4=endppq, 5=len, 6=chan, 7=pitch, 8=vel, noSort)		
