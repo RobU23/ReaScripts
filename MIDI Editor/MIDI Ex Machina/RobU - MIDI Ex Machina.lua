@@ -57,7 +57,7 @@ local p = require 'persistence' -- currently unused, i.e. no preset save, load, 
 --------------------------------------------------------------------------------
 m = {} -- all ex machina data
 -- user changeable defaults are marked with "(option)"
-m.debug = true
+m.debug = false
 m.OS = reaper.GetOS()
 -- window
 m.win_title = "RobU : MIDI Ex Machina - v1.3.4"; m.win_dockstate = 0
@@ -448,7 +448,7 @@ end
 -- GetNotesFromTake() - fill a note buffer from the active take
 --------------------------------------------------------------------------------
 function GetNotesFromTake()
-	local debug = true
+	local debug = false
 	if debug or m.debug then ConMsg("GetNotesFromTake()") end
 	local i, t
 	if m.activeTake then
@@ -2024,21 +2024,23 @@ function MainLoop()
 	
 	-- check for selected item, midi editor and take
 	m.lmItem = m.mItem
+	m.lactiveTake = m.activeTake
 	m.mItem = reaper.GetSelectedMediaItem(0, 0)
 	if m.mItem then
 		if m.mItem ~= m.lmItem then 
-			m.mItemNew = true
 			m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0
 			seqShiftVal.label = tostring(m.seqShift)
 			m.notebuf.i = 0 -- brutal hack
 			PurgeNoteBuf(); NewNoteBuf()
-		else
-			m.mItemNew = false
-		end	
-		
+			m.activeEditor, m.activeTake = nil, nil
+		end
+
 		m.activeEditor = reaper.MIDIEditor_GetActive()
 		if m.activeEditor then
 			m.activeTake = reaper.MIDIEditor_GetTake(m.activeEditor)
+			
+			if m.activeTake ~= m.lactiveTake then GetNotesFromTake() end
+			if m.lmItem == nil and m.mItem then GetNotesFromTake() end						
 			if m.activeTake then
 				ShowMessage(msgText, 0) -- clear old messages
 				-- check for changes in the active take if the "Permute" scale is selected		
