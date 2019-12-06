@@ -31,8 +31,9 @@
 @version 1.3.4
 @author RobU
 @changelog
-	v1.3.4
-	fixed looped item note shifting bug
+	v1.3.5
+	Fixed crash when item not selected in arrange view
+	Provided more meaningful warning messages (for not item, or no midi editor)
 @provides
 	[main=midi_editor] .
 	[nomain] eGUI.lua
@@ -60,7 +61,7 @@ m = {} -- all ex machina data
 m.debug = false
 m.OS = reaper.GetOS()
 -- window
-m.win_title = "RobU : MIDI Ex Machina - v1.3.4"; m.win_dockstate = 0
+m.win_title = "RobU : MIDI Ex Machina - v1.3.5"; m.win_dockstate = 0
 m.win_x = 10; m.win_y = 10; m.win_w = 900; m.win_h = 280 -- window dimensions
 m.win_bg = {0, 0, 0} -- background colour
 m.def_zoom = 4 -- 100% (option)
