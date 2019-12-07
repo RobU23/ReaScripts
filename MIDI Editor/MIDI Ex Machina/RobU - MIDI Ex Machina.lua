@@ -28,7 +28,7 @@
 @donation https://www.paypal.me/RobUrquhart
 @link Reaper http://reaper.fm
 @link Forum Thread http://reaper.fm
-@version 1.3.4
+@version 1.3.5
 @author RobU
 @changelog
 	v1.3.5
