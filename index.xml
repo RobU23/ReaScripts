@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="RobU Scripts" commit="e697cda55c3306c429bcc1c40d89736ab537f20d">
+<index version="1" name="RobU Scripts" commit="6fc14048fee05b74b2888e5a5a69061eabe3630f">
   <category name="MIDI Editor/MIDI Ex Machina">
     <reapack name="RobU - MIDI Ex Machina.lua" type="script" desc="MIDI Ex Machina - Note Randomiser, Sequencer, and Euclidean Generator">
       <metadata>
@@ -125,15 +125,6 @@ fixed looped item note shifting bug]]></changelog>
         <source file="eGUI.lua">https://github.com/RobU23/ReaScripts/raw/6fc14048fee05b74b2888e5a5a69061eabe3630f/MIDI%20Editor/MIDI%20Ex%20Machina/eGUI.lua</source>
         <source file="euclid.lua">https://github.com/RobU23/ReaScripts/raw/6fc14048fee05b74b2888e5a5a69061eabe3630f/MIDI%20Editor/MIDI%20Ex%20Machina/euclid.lua</source>
         <source file="persistence.lua">https://github.com/RobU23/ReaScripts/raw/6fc14048fee05b74b2888e5a5a69061eabe3630f/MIDI%20Editor/MIDI%20Ex%20Machina/persistence.lua</source>
-      </version>
-      <version name="1.3.5" author="RobU" time="2019-12-07T19:15:03Z">
-        <changelog><![CDATA[v1.3.5
-Fixed crash when item not selected in arrange view
-Provided more meaningful warning messages (for not item, or no midi editor)]]></changelog>
-        <source main="midi_editor">https://github.com/RobU23/ReaScripts/raw/e697cda55c3306c429bcc1c40d89736ab537f20d/MIDI%20Editor/MIDI%20Ex%20Machina/RobU%20-%20MIDI%20Ex%20Machina.lua</source>
-        <source file="eGUI.lua">https://github.com/RobU23/ReaScripts/raw/e697cda55c3306c429bcc1c40d89736ab537f20d/MIDI%20Editor/MIDI%20Ex%20Machina/eGUI.lua</source>
-        <source file="euclid.lua">https://github.com/RobU23/ReaScripts/raw/e697cda55c3306c429bcc1c40d89736ab537f20d/MIDI%20Editor/MIDI%20Ex%20Machina/euclid.lua</source>
-        <source file="persistence.lua">https://github.com/RobU23/ReaScripts/raw/e697cda55c3306c429bcc1c40d89736ab537f20d/MIDI%20Editor/MIDI%20Ex%20Machina/persistence.lua</source>
       </version>
     </reapack>
   </category>
