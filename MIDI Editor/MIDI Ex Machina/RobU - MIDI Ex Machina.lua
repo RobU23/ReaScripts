@@ -740,7 +740,7 @@ function ShuffleNotes()
 	
 		i = i + 1
 	end
-	ConMsg("Number of notes: " .. i)
+	--ConMsg("Number of notes: " .. i)
 	-- fisher-yates
 	for i = #fy.ind, 2, -1 do
 		local j = math.random(i)
@@ -753,16 +753,16 @@ function ShuffleNotes()
 		
 			if fy.pos[i] == fy.pos[i + 1] then -- same note position
 			
-				ConMsg("POS  :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
+				--ConMsg("POS  :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
 				
 				while fy.num[i] == fy.num[i + 1] do --same note number	
 				
-					ConMsg("PRE  :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
+					--ConMsg("PRE  :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
 					
 					j = math.random(#fy.ind)
 					fy.num[i + 1], fy.num[j] = fy.num[j], fy.num[i + 1]
 					
-					ConMsg("POST :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
+					--ConMsg("POST :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
 				end
 				
 			end
