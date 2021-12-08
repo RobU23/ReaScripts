@@ -647,46 +647,37 @@ function GetUniqueNote(tNotes, noteIdx, noteProbTable, octProbTable)
 	if m.rndOctX2F and not m.rndPermuteF then
 		newNote = newNote + octProbTable[math.random(1, #octProbTable)]
 	end
-	
 	if #m.dupes == 0 then -- dupe table is empty
 		m.dupes.i = 1;  m.dupes[m.dupes.i] = {} -- add note to the dupe table
 		m.dupes[m.dupes.i].srtpos	= tNotes[noteIdx][3]
 		m.dupes[m.dupes.i].endpos	= tNotes[noteIdx][4]
 		m.dupes[m.dupes.i].midi		= newNote
 		return newNote
-		
 	elseif tNotes[noteIdx][3] >= m.dupes[m.dupes.i].srtpos
 		and tNotes[noteIdx][3] < m.dupes[m.dupes.i].endpos then -- note overlaps with previous note
 		m.dupes.i = m.dupes.i + 1; m.dupes[m.dupes.i] = {} -- add note to dupe table
 		m.dupes[m.dupes.i].srtpos = tNotes[noteIdx][3]
 		m.dupes[m.dupes.i].endpos = tNotes[noteIdx][4]
 		unique = false
-		
 		while not unique do		
 			newNote = m.root + noteProbTable[math.random(1,#noteProbTable)]
-			
 			if m.rndOctX2F and not m.rndPermuteF then
 				newNote = newNote + octProbTable[math.random(1, #octProbTable)]
 			end
 			unique = true
-			
 				for i = 1, m.dupes.i - 1 do -- check all previous overlapping notes
 					if m.dupes[i].midi == newNote then unique = false end -- clash, try again
 				end -- m.dupes.i
-				
 		end -- not unique
 			m.dupes[m.dupes.i].midi = newNote -- update dupe table
 			return newNote
-			
 	else -- note does not overlap with previous note
 		m.dupes = {}; m.dupes.i = 1;  m.dupes[m.dupes.i] = {} -- reset dupe table
 		m.dupes[m.dupes.i].srtpos	= tNotes[noteIdx][3]
 		m.dupes[m.dupes.i].endpos	= tNotes[noteIdx][4]
 		m.dupes[m.dupes.i].midi		= newNote
-		return newNote		
-		
+		return newNote			
 	end -- if #m.dupes
-	
 end
 --------------------------------------------------------------------------------
 -- RandomiseNotesPoly(noteProbTable)
@@ -715,74 +706,6 @@ function RandomiseNotesPoly(noteProbTable)
 		m.pHash = pHash
 	end
 end
-
---------------------------------------------------------------------------------
--- ShuffleNotes()
---------------------------------------------------------------------------------
-function ShuffleNotes()
-	local debug = false
-	if debug or m.debug then ConMsg("ShuffleNotes()") end
-
-	local fy = {ind={}, pos={}, num={}}
-	local t1, t2 = GetNoteBuf(), NewNoteBuf()
-	CopyTable(t1, t2)
-
-	local i, j = 1, 1
-	
-	-- grab all the selected notes
-	while t2[i] do 
-	
-		if t2[i][1] == true or m.rndAllNotesF then
-			table.insert(fy.ind, i)
-			table.insert(fy.pos, t2[i][3])
-			table.insert(fy.num, t2[i][7])
-		end
-	
-		i = i + 1
-	end
-	--ConMsg("Number of notes: " .. i)
-	-- fisher-yates
-	for i = #fy.ind, 2, -1 do
-		local j = math.random(i)
-		fy.num[i], fy.num[j] = fy.num[j], fy.num[i]
-	end
-	
-	if #fy.ind > 1 then -- check for note munching
-	
-		for i = 1, #fy.ind - 1 do
-		
-			if fy.pos[i] == fy.pos[i + 1] then -- same note position
-			
-				--ConMsg("POS  :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
-				
-				while fy.num[i] == fy.num[i + 1] do --same note number	
-				
-					--ConMsg("PRE  :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
-					
-					j = math.random(#fy.ind)
-					fy.num[i + 1], fy.num[j] = fy.num[j], fy.num[i + 1]
-					
-					--ConMsg("POST :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
-				end
-				
-			end
-		end
-	end
-		
-	-- write back to the note buffer
-	for k, v in ipairs(fy.ind) do
-		t2[v][7] = fy.num[k]
-	end
-	
-	PurgeNoteBuf()
-	InsertNotes()
-	
-end
-
-function shuffleDeMunch()
-
-end
-
 --------------------------------------------------------------------------------
 -- GenSequence(seqProbTable, accProbTable, accSlider, legProbTable)
 --------------------------------------------------------------------------------
@@ -1071,20 +994,16 @@ t_winElements = {winFrame, zoomDrop, winText, layerBtn01, layerBtn02, layerBtn03
 --------------------------------------------------------------------------------
 -- key, octave, & scale droplists
 dx, dy, dw, dh = 25, 70, 110, 20
-local keyDrop = e.Droplist:new({1, 2, 3}, dx, dy, (dw*0.5)-5, dh, e.col_blue, "Key", e.Arial, m.font_sz, e.col_grey8, m.key, m.notes)
-local octDrop = e.Droplist:new({1, 2, 3}, dx+(dw*0.5)+5, dy, (dw*0.5)-5, dh, e.col_blue, "Oct ", e.Arial, m.font_sz, e.col_grey8, m.oct,{0, 1, 2, 3, 4, 5, 6, 7})
-local scaleDrop = e.Droplist:new({1, 2, 3}, dx, dy + 50, dw, dh, e.col_blue, "Scale", e.Arial, m.font_sz, e.col_grey8, 1, m.scalelist)
+local keyDrop = e.Droplist:new({1, 2, 3}, dx, dy,		 dw, dh, e.col_blue, "Root Note", e.Arial, m.font_sz, e.col_grey8, m.key, m.notes)
+local octDrop = e.Droplist:new({1, 2, 3}, dx, dy + 45, dw, dh, e.col_blue, "Octave ", e.Arial, m.font_sz, e.col_grey8, m.oct,{0, 1, 2, 3, 4, 5, 6, 7})
+local scaleDrop = e.Droplist:new({1, 2, 3}, dx, dy + 90, dw, dh, e.col_blue, "Scale", e.Arial, m.font_sz, e.col_grey8, 1, m.scalelist)
 local t_Droplists = {keyDrop, octDrop, scaleDrop} 
 
 --------------------------------------------------------------------------------
 -- Randomiser Layer
 --------------------------------------------------------------------------------
--- note shuffle button
-local shuffleBtn = e.Button:new({1}, 25, 165, 110, 25, e.col_green, "Shuffle", e.Arial, m.font_sz, e.col_grey8)
 -- note randomise button
-local randomBtn = e.Button:new({1}, 25, 205, 110, 25, e.col_green, "Randomise", e.Arial, m.font_sz, e.col_grey8)
-
-
+local randomBtn = e.Button:new({1}, 25, 205, 110, 25, e.col_green, "Generate", e.Arial, m.font_sz, e.col_grey8)
 -- note weight sliders
 local nx, ny, nw, nh, np = 160, 50, 30, 150, 40
 local noteSldr01 = e.Vert_Slider:new({1}, nx,        ny, nw, nh, e.col_blue, "", e.Arial, m.font_sz, e.col_grey8, 1, 0, 0, 12, 1)
@@ -1178,7 +1097,7 @@ local msgText = e.Textbox:new({9}, m.win_x + 10, m.win_y + 30, m.win_w - 40, m.w
 --------------------------------------------------------------------------------
 -- Shared Element Tables
 --------------------------------------------------------------------------------
-local t_Buttons = {randomBtn, shuffleBtn, sequenceBtn, seqShiftLBtn, seqShiftRBtn, euclidBtn}
+local t_Buttons = {randomBtn, sequenceBtn, seqShiftLBtn, seqShiftRBtn, euclidBtn}
 local t_Checkboxes = {noteOptionsCb, seqOptionsCb, eucOptionsCb}
 local t_RadButtons = {seqGridRad}
 local t_RSliders = {octProbSldr, seqAccRSldr, seqAccProbSldr, seqLegProbSldr}
@@ -1366,20 +1285,6 @@ randomBtn.onLClick = function()
 		pExtSaveStateF = true
 	end --m.activeTake
 end 
-shuffleBtn.onLClick = function()
-	local debug = false
-	
-	if debug or m.debug then ConMsg("\nshuffleBtn.onLClick()") end
-	if m.activeTake and m.mItem then
-		m.seqShift = 0; m.seqShiftMin = 0; m.seqShiftMax = 0 -- reset shift
-		seqShiftVal.label = tostring(m.seqShift)
-		
-		GetNotesFromTake() 		
-		ShuffleNotes()
-	end
-	
-end
-
 -- Randomiser options toggle logic
 noteOptionsCb.onLClick = function()
 	local debug = false
