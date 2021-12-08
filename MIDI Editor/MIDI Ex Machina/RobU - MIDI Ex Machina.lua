@@ -647,37 +647,46 @@ function GetUniqueNote(tNotes, noteIdx, noteProbTable, octProbTable)
 	if m.rndOctX2F and not m.rndPermuteF then
 		newNote = newNote + octProbTable[math.random(1, #octProbTable)]
 	end
+	
 	if #m.dupes == 0 then -- dupe table is empty
 		m.dupes.i = 1;  m.dupes[m.dupes.i] = {} -- add note to the dupe table
 		m.dupes[m.dupes.i].srtpos	= tNotes[noteIdx][3]
 		m.dupes[m.dupes.i].endpos	= tNotes[noteIdx][4]
 		m.dupes[m.dupes.i].midi		= newNote
 		return newNote
+		
 	elseif tNotes[noteIdx][3] >= m.dupes[m.dupes.i].srtpos
 		and tNotes[noteIdx][3] < m.dupes[m.dupes.i].endpos then -- note overlaps with previous note
 		m.dupes.i = m.dupes.i + 1; m.dupes[m.dupes.i] = {} -- add note to dupe table
 		m.dupes[m.dupes.i].srtpos = tNotes[noteIdx][3]
 		m.dupes[m.dupes.i].endpos = tNotes[noteIdx][4]
 		unique = false
+		
 		while not unique do		
 			newNote = m.root + noteProbTable[math.random(1,#noteProbTable)]
+			
 			if m.rndOctX2F and not m.rndPermuteF then
 				newNote = newNote + octProbTable[math.random(1, #octProbTable)]
 			end
 			unique = true
+			
 				for i = 1, m.dupes.i - 1 do -- check all previous overlapping notes
 					if m.dupes[i].midi == newNote then unique = false end -- clash, try again
 				end -- m.dupes.i
+				
 		end -- not unique
 			m.dupes[m.dupes.i].midi = newNote -- update dupe table
 			return newNote
+			
 	else -- note does not overlap with previous note
 		m.dupes = {}; m.dupes.i = 1;  m.dupes[m.dupes.i] = {} -- reset dupe table
 		m.dupes[m.dupes.i].srtpos	= tNotes[noteIdx][3]
 		m.dupes[m.dupes.i].endpos	= tNotes[noteIdx][4]
 		m.dupes[m.dupes.i].midi		= newNote
-		return newNote			
+		return newNote		
+		
 	end -- if #m.dupes
+	
 end
 --------------------------------------------------------------------------------
 -- RandomiseNotesPoly(noteProbTable)
@@ -718,7 +727,6 @@ function ShuffleNotes()
 	local t1, t2 = GetNoteBuf(), NewNoteBuf()
 	CopyTable(t1, t2)
 
-	
 	local i, j = 1, 1
 	
 	-- grab all the selected notes
@@ -732,7 +740,7 @@ function ShuffleNotes()
 	
 		i = i + 1
 	end
-	
+	ConMsg("Number of notes: " .. i)
 	-- fisher-yates
 	for i = #fy.ind, 2, -1 do
 		local j = math.random(i)
@@ -744,10 +752,17 @@ function ShuffleNotes()
 		for i = 1, #fy.ind - 1 do
 		
 			if fy.pos[i] == fy.pos[i + 1] then -- same note position
+			
+				ConMsg("POS  :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
 				
 				while fy.num[i] == fy.num[i + 1] do --same note number	
+				
+					ConMsg("PRE  :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
+					
 					j = math.random(#fy.ind)
-					fy.num[i], fy.num[j] = fy.num[j], fy.num[i]
+					fy.num[i + 1], fy.num[j] = fy.num[j], fy.num[i + 1]
+					
+					ConMsg("POST :: pos = " .. fy.pos[i] .. "fy.num[i] = " .. fy.num[i] .. ", fy.num[i + 1] = " .. fy.num[i + 1])
 				end
 				
 			end
@@ -762,6 +777,10 @@ function ShuffleNotes()
 	PurgeNoteBuf()
 	InsertNotes()
 	
+end
+
+function shuffleDeMunch()
+
 end
 
 --------------------------------------------------------------------------------
