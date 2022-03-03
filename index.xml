@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="RobU Scripts" commit="6fc14048fee05b74b2888e5a5a69061eabe3630f">
+<index version="1" name="RobU Scripts" commit="0692c3bb7ceaa9490f27172749f0a5af51c992bc">
   <category name="MIDI Editor/MIDI Ex Machina">
     <reapack name="RobU - MIDI Ex Machina.lua" type="script" desc="MIDI Ex Machina - Note Randomiser, Sequencer, and Euclidean Generator">
       <metadata>
-        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 Courier;}}
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 \b \fs24 MIDI Ex Machina\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel3 \b \fs24 MIDI Ex Machina\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 A scale-oriented, probability based composition tool\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 \b \fs24 Features\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel3 \b \fs24 Features\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 note randomiser\par}
 {\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab selectable root note, octave, scale\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab note probability sliders\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab note probability per scale note\par}
 {\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab randomise all or selected notes\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab octave doubler, with probability slider\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab force first note to root note option\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab permute selected notes\sa180\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab octave doubler, with probability\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab force first note to root of the scale option\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab shuffle notes (fisher-yates)\sa180\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 monophonic random sequence generator\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab note length probability sliders\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab note length probability\par}
 {\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab grid size control\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab velocity accent level, and probabilty slider\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab legato probability slider\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab velocity accent level, and probabilty\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab legato probability\par}
 {\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab various generation options\sa180\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 euclidean sequence generator\par}
 {\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab grid size control\par}
@@ -125,6 +125,25 @@ fixed looped item note shifting bug]]></changelog>
         <source file="eGUI.lua">https://github.com/RobU23/ReaScripts/raw/6fc14048fee05b74b2888e5a5a69061eabe3630f/MIDI%20Editor/MIDI%20Ex%20Machina/eGUI.lua</source>
         <source file="euclid.lua">https://github.com/RobU23/ReaScripts/raw/6fc14048fee05b74b2888e5a5a69061eabe3630f/MIDI%20Editor/MIDI%20Ex%20Machina/euclid.lua</source>
         <source file="persistence.lua">https://github.com/RobU23/ReaScripts/raw/6fc14048fee05b74b2888e5a5a69061eabe3630f/MIDI%20Editor/MIDI%20Ex%20Machina/persistence.lua</source>
+      </version>
+      <version name="1.3.5" author="RobU" time="2019-12-07T19:15:03Z">
+        <changelog><![CDATA[v1.3.5
+Fixed crash when item not selected in arrange view
+Provided more meaningful warning messages (for not item, or no midi editor)]]></changelog>
+        <source main="midi_editor">https://github.com/RobU23/ReaScripts/raw/e697cda55c3306c429bcc1c40d89736ab537f20d/MIDI%20Editor/MIDI%20Ex%20Machina/RobU%20-%20MIDI%20Ex%20Machina.lua</source>
+        <source file="eGUI.lua">https://github.com/RobU23/ReaScripts/raw/e697cda55c3306c429bcc1c40d89736ab537f20d/MIDI%20Editor/MIDI%20Ex%20Machina/eGUI.lua</source>
+        <source file="euclid.lua">https://github.com/RobU23/ReaScripts/raw/e697cda55c3306c429bcc1c40d89736ab537f20d/MIDI%20Editor/MIDI%20Ex%20Machina/euclid.lua</source>
+        <source file="persistence.lua">https://github.com/RobU23/ReaScripts/raw/e697cda55c3306c429bcc1c40d89736ab537f20d/MIDI%20Editor/MIDI%20Ex%20Machina/persistence.lua</source>
+      </version>
+      <version name="1.3.6" author="RobU" time="2022-03-03T19:34:43Z">
+        <changelog><![CDATA[v1.3.6
+Added proper note shuffling using Fisher-Yates algorithm (polyphonic)	
+Removed the shitty 'Permute' scale hack :)
+Fixed several corner-cases where notes might get eaten by the randomiser
+Code clean-up in preparation for GUI update]]></changelog>
+        <source main="midi_editor">https://github.com/RobU23/ReaScripts/raw/0692c3bb7ceaa9490f27172749f0a5af51c992bc/MIDI%20Editor/MIDI%20Ex%20Machina/RobU%20-%20MIDI%20Ex%20Machina.lua</source>
+        <source file="eGUI.lua">https://github.com/RobU23/ReaScripts/raw/0692c3bb7ceaa9490f27172749f0a5af51c992bc/MIDI%20Editor/MIDI%20Ex%20Machina/eGUI.lua</source>
+        <source file="euclid.lua">https://github.com/RobU23/ReaScripts/raw/0692c3bb7ceaa9490f27172749f0a5af51c992bc/MIDI%20Editor/MIDI%20Ex%20Machina/euclid.lua</source>
       </version>
     </reapack>
   </category>
